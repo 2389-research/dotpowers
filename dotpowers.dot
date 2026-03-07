@@ -109,115 +109,80 @@ Otherwise: outcome=more_questions
   ];
 
   // ============================================================
-  // PHASE 1 — DESIGN BRIEF  (superpowers:brainstorming — present sections,
-  //   get approval after each, scale to complexity)
+  // PHASE 1 — DESIGN BRIEF  (superpowers:brainstorming — full document review)
   // ============================================================
 
-  CreateSectionTracker [
-    shape=parallelogram,
-    label="Create Section Tracker",
-    command="set -eu\nmkdir -p .ai\nprintf 'section_id\\ttitle\\tstatus\\n' > .ai/sections.tsv\nprintf 'architecture\\tArchitecture and Components\\tpending\\n' >> .ai/sections.tsv\nprintf 'tech_stack\\tTech Stack with Rationale\\tpending\\n' >> .ai/sections.tsv\nprintf 'error_handling\\tError Handling Strategy\\tpending\\n' >> .ai/sections.tsv\nprintf 'testing\\tTesting Strategy\\tpending\\n' >> .ai/sections.tsv\nprintf 'components\\tComponent Breakdown and Parallelism\\tpending\\n' >> .ai/sections.tsv\nprintf 'sections-ready'"
-  ];
-
-  PickNextSection [
-    shape=parallelogram,
-    label="Pick Next Section",
-    command="set -eu\ntarget=$(awk -F '\\t' 'NR>1 && $3==\"pending\"{print $1; exit}' .ai/sections.tsv)\nif [ -z \"$target\" ]; then\n  printf 'all_sections_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > .ai/current_section.txt\ntitle=$(awk -F '\\t' -v t=\"$target\" '$1==t{print $2}' .ai/sections.tsv)\nprintf '%s' \"$title\" > .ai/current_section_title.txt\nprintf 'next_section-%s' \"$target\""
-  ];
-
-  CheckSectionsRemaining [
-    shape=diamond,
-    label="Sections Remaining?",
-    prompt="You are working in `run.working_dir`.
-
-Check the output from the previous tool node.
-
-If the output contains 'all_sections_complete': outcome=all_done
-If the output contains 'next_section-': outcome=has_section
-"
-  ];
-
-  WriteSection [
+  WriteDesignBrief [
     shape=box,
-    label="Write Design Section",
+    label="Write Design Brief",
     goal_gate=true,
-    retry_target="WriteSection",
+    retry_target="WriteDesignBrief",
     prompt="You are working in `run.working_dir`.
 
 ## Role
-You are a senior software architect presenting one section of the design, one at a time, for human review.
+You are a senior software architect producing a complete design brief from the brainstorm.
 
 ## Context
-1. Read .ai/brainstorm.md for the full brainstorm conversation
-2. Read .ai/current_section.txt for which section to write
-3. Read .ai/current_section_title.txt for the section title
-4. Read .ai/design-brief.md if it exists (for previously approved sections)
+Read .ai/brainstorm.md for the full brainstorm conversation with the human.
 
-## Section-Specific Guidance
-- **architecture**: Components, data flow, key architectural decisions. Propose 2-3 approaches with trade-offs if not already resolved in brainstorm. Select recommended approach with justification.
-- **tech_stack**: Language, framework, key dependencies. Justify each choice.
-- **error_handling**: Error categories, handling strategies, recovery patterns.
-- **testing**: Test framework (appropriate for the language), test levels (unit/integration/e2e), coverage targets.
-- **components**: Detailed component specs with dependency graph. Mark which can be built in parallel vs must be sequential.
+## Task
+Synthesize the brainstorm into a structured design brief. Cover ALL of these sections:
+
+1. **Architecture and Components** — components, data flow, key decisions. If not resolved in brainstorm, propose 2-3 approaches with trade-offs and select recommended.
+2. **Tech Stack** — language, framework, key dependencies. Justify each choice.
+3. **Error Handling** — error categories, handling strategies, recovery patterns.
+4. **Testing Strategy** — test framework (appropriate for the language), test levels (unit/integration/e2e), coverage targets.
+5. **Component Breakdown** — detailed specs with dependency graph. Mark which can be built in parallel vs must be sequential.
 
 ## Rules
-- Scale content to complexity — few sentences for simple projects, 200-300 words for complex ones
+- Scale each section to complexity — few sentences for simple projects, 200-300 words for complex ones
 - YAGNI ruthlessly — cut anything not strictly needed for v1
 - Be specific: exact library names, exact file paths where possible
-- This section will be presented to the human for approval before moving on
+- The human will review this as a complete document
 
 ## Output
-Append (or update) the section in .ai/design-brief.md under a heading matching the section title.
+Write to .ai/design-brief.md with clear section headings.
 "
   ];
 
-  ReviewSection [
+  ReviewDesign [
     shape=hexagon,
     type="wait.human",
-    label="Review Section"
+    label="Review Design Brief"
   ];
 
-  IncorporateSectionFeedback [
+  IncorporateDesignFeedback [
     shape=box,
-    label="Incorporate Section Feedback",
+    label="Incorporate Design Feedback",
     goal_gate=true,
-    retry_target="IncorporateSectionFeedback",
+    retry_target="IncorporateDesignFeedback",
     prompt="You are working in `run.working_dir`.
 
 ## Task
-The human reviewed a design section and provided feedback.
-
-## Context
-1. Read .ai/current_section.txt for which section was reviewed
-2. Read .ai/design-brief.md for the current content
-3. Read the human's feedback from context
+The human reviewed the full design brief and provided feedback.
 
 ## Process
-1. If they approved (said ok, looks good, approved, yes, thumbs up, or similar): end with SECTION_APPROVED
-2. If they requested changes: update ONLY that section in .ai/design-brief.md, end with SECTION_REVISED
+1. Read .ai/design-brief.md
+2. Read the human's feedback from context
+3. If they approved (ok, looks good, approved, yes, ship it, or similar): end with APPROVED
+4. If they requested changes: update the relevant sections in .ai/design-brief.md, end with REVISED
 
 ## Output
 Update .ai/design-brief.md if changes were requested.
-End your response with exactly SECTION_APPROVED or SECTION_REVISED.
+End your response with exactly APPROVED or REVISED.
 "
   ];
 
-  CheckSectionApproved [
+  CheckDesignApproved [
     shape=diamond,
-    label="Section Approved?",
+    label="Design Approved?",
     prompt="You are working in `run.working_dir`.
 
 Check the previous node's output.
 
-If it contains SECTION_APPROVED: outcome=approved
-If it contains SECTION_REVISED: outcome=revised
+If it contains APPROVED: outcome=approved
+If it contains REVISED: outcome=revised
 "
-  ];
-
-  MarkSectionComplete [
-    shape=parallelogram,
-    label="Mark Section Complete",
-    command="set -eu\ntarget=$(cat .ai/current_section.txt)\nawk -F '\\t' -v OFS='\\t' -v target=\"$target\" '\nNR==1 {print; next}\n{ if ($1==target) { $3=\"approved\" }; print }\n' .ai/sections.tsv > .ai/sections.tsv.tmp\nmv .ai/sections.tsv.tmp .ai/sections.tsv\nprintf 'approved-%s' \"$target\""
   ];
 
   CommitBrief [
@@ -1071,18 +1036,13 @@ Report the current branch name and worktree location. No cleanup needed — the 
   RefineUnderstanding -> CheckBrainstormDone;
   CheckBrainstormDone -> HumanBrainstorm [label="more questions", condition="outcome=more_questions"];
 
-  // Phase 1: Design Brief (section by section, human approves each)
-  CheckBrainstormDone -> CreateSectionTracker [label="ready for design", condition="outcome=done", weight=2];
-  CreateSectionTracker -> PickNextSection;
-  PickNextSection -> CheckSectionsRemaining;
-  CheckSectionsRemaining -> WriteSection [label="has section", condition="outcome=has_section", weight=2];
-  CheckSectionsRemaining -> CommitBrief [label="all approved", condition="outcome=all_done"];
-  WriteSection -> ReviewSection;
-  ReviewSection -> IncorporateSectionFeedback;
-  IncorporateSectionFeedback -> CheckSectionApproved;
-  CheckSectionApproved -> MarkSectionComplete [label="approved", condition="outcome=approved", weight=2];
-  CheckSectionApproved -> ReviewSection [label="revised, re-review", condition="outcome=revised"];
-  MarkSectionComplete -> PickNextSection;
+  // Phase 1: Design Brief (full document review with human)
+  CheckBrainstormDone -> WriteDesignBrief [label="ready for design", condition="outcome=done", weight=2];
+  WriteDesignBrief -> ReviewDesign;
+  ReviewDesign -> IncorporateDesignFeedback;
+  IncorporateDesignFeedback -> CheckDesignApproved;
+  CheckDesignApproved -> CommitBrief [label="approved", condition="outcome=approved", weight=2];
+  CheckDesignApproved -> ReviewDesign [label="revised, re-review", condition="outcome=revised"];
 
   // Phase 2: Plan
   CommitBrief -> PlanFanOut;
