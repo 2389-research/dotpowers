@@ -108,15 +108,9 @@ Append to docs/plans/brainstorm.md with:
   ];
 
   CheckBrainstormDone [
-    shape=diamond,
+    shape=parallelogram,
     label="Brainstorm Complete?",
-    prompt="You are working in `run.working_dir`.
-
-Read docs/plans/brainstorm.md and check the last section.
-
-If it contains READY_FOR_DESIGN: outcome=done
-Otherwise: outcome=more_questions
-"
+    tool_command="#!/bin/sh\nif grep -q 'READY_FOR_DESIGN' docs/plans/brainstorm.md 2>/dev/null; then\n  printf 'done'\nelse\n  printf 'more_questions'\nfi"
   ];
 
   // ============================================================
@@ -181,20 +175,15 @@ The human reviewed the full design brief and provided feedback.
 
 ## Output
 Update docs/plans/design-brief.md if changes were requested.
+Write the result to docs/plans/design-status.txt — either the single word APPROVED or REVISED.
 End your response with exactly APPROVED or REVISED.
 "
   ];
 
   CheckDesignApproved [
-    shape=diamond,
+    shape=parallelogram,
     label="Design Approved?",
-    prompt="You are working in `run.working_dir`.
-
-Check the previous node's output.
-
-If it contains APPROVED: outcome=approved
-If it contains REVISED: outcome=revised
-"
+    tool_command="#!/bin/sh\nstatus=$(cat docs/plans/design-status.txt 2>/dev/null | tr -d '[:space:]')\nif [ \"$status\" = 'APPROVED' ]; then\n  printf 'approved'\nelse\n  printf 'revised'\nfi"
   ];
 
   CommitBrief [
@@ -453,18 +442,7 @@ Initialize the project based on the plan's tech stack section.
     tool_command="set -eu\ntarget=$(awk -F '\\t' 'NR>1 && $3==\"planned\"{print $1; exit}' docs/plans/ledger.tsv)\nif [ -z \"$target\" ]; then\n  target=$(awk -F '\\t' 'NR>1 && $3==\"in_progress\"{print $1; exit}' docs/plans/ledger.tsv)\nfi\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nnow=$(date -u +%Y-%m-%dT%H:%M:%SZ)\nawk -F '\\t' -v OFS='\\t' -v target=\"$target\" -v now=\"$now\" '\nNR==1 {print; next}\n{ if ($1==target) { $3=\"in_progress\"; $4=now }; print }\n' docs/plans/ledger.tsv > docs/plans/ledger.tsv.tmp\nmv docs/plans/ledger.tsv.tmp docs/plans/ledger.tsv\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
   ];
 
-  CheckTasksRemaining [
-    shape=diamond,
-    label="Tasks Remaining?",
-    prompt="You are working in `run.working_dir`.
-
-Check if there are remaining tasks.
-
-Read the output from the previous tool node.
-If the output contains 'all_complete': outcome=complete
-If the output contains 'next_task-': outcome=has_task
-"
-  ];
+  // CheckTasksRemaining removed — routing directly from PickNextTask via tool_stdout
 
   ImplementTask [
     shape=box,
@@ -1046,15 +1024,15 @@ Report the current branch name and worktree location. No cleanup needed — the 
   ExploreIdea -> HumanBrainstorm;
   HumanBrainstorm -> RefineUnderstanding;
   RefineUnderstanding -> CheckBrainstormDone;
-  CheckBrainstormDone -> HumanBrainstorm [label="more questions", condition="outcome=more_questions"];
+  CheckBrainstormDone -> HumanBrainstorm [label="more questions", condition="context.tool_stdout=more_questions"];
 
   // Phase 1: Design Brief (full document review with human)
-  CheckBrainstormDone -> WriteDesignBrief [label="ready for design", condition="outcome=done", weight=2];
+  CheckBrainstormDone -> WriteDesignBrief [label="ready for design", condition="context.tool_stdout=done", weight=2];
   WriteDesignBrief -> ReviewDesign;
   ReviewDesign -> IncorporateDesignFeedback;
   IncorporateDesignFeedback -> CheckDesignApproved;
-  CheckDesignApproved -> CommitBrief [label="approved", condition="outcome=approved", weight=2];
-  CheckDesignApproved -> ReviewDesign [label="revised, re-review", condition="outcome=revised"];
+  CheckDesignApproved -> CommitBrief [label="approved", condition="context.tool_stdout=approved", weight=2];
+  CheckDesignApproved -> ReviewDesign [label="revised, re-review", condition="context.tool_stdout=revised"];
 
   // Phase 2: Plan
   CommitBrief -> PlanFanOut;
@@ -1074,9 +1052,8 @@ Report the current branch name and worktree location. No cleanup needed — the 
 
   // Phase 4: Implement Loop
   VerifyBaseline -> PickNextTask;
-  PickNextTask -> CheckTasksRemaining;
-  CheckTasksRemaining -> ImplementTask [label="has task", condition="outcome=has_task", weight=2];
-  CheckTasksRemaining -> ValidateBuild [label="all done", condition="outcome=complete"];
+  PickNextTask -> ImplementTask [label="has task", condition="context.tool_stdout!=all_complete", weight=2];
+  PickNextTask -> ValidateBuild [label="all done", condition="context.tool_stdout=all_complete"];
   ImplementTask -> SpecReview;
   SpecReview -> QualityReview [condition="outcome=success", label="spec pass", weight=2];
   SpecReview -> ImplementTask [condition="outcome=fail", label="spec fail"];
