@@ -24,6 +24,12 @@ digraph dotpowers {
   // PHASE 0 — EXPLORE IDEA  (superpowers:brainstorming — understand the idea)
   // ============================================================
 
+  WhatAreWeBuilding [
+    shape=hexagon,
+    type="wait.human",
+    label="What are we building?"
+  ];
+
   ExploreIdea [
     shape=box,
     label="Explore Idea",
@@ -35,17 +41,20 @@ digraph dotpowers {
 You are a senior software architect starting a brainstorm session.
 
 ## Task
-Read whatever exists in the working directory — could be a one-line idea, a README, a detailed spec, or nothing but a project name. Your job is to understand what we're building.
+The human just told you what they want to build. Combine their input with whatever already exists in the working directory (README, spec, config files, existing code — or nothing at all).
 
 ## Process
-1. Read all files in the working directory for context
-2. Summarize what you understand so far about the project
-3. Identify the SINGLE most important open question — the one that would most change the design if answered differently
-4. Write your understanding and your question to .ai/brainstorm.md
-5. Format the question as multiple choice (2-4 options) with your recommended answer marked
+1. Read the human's idea/description from context
+2. Read all files in the working directory for additional context
+3. Summarize what you understand so far about the project
+4. Identify the SINGLE most important open question — the one that would most change the design if answered differently
+5. Write your understanding and your question to .ai/brainstorm.md
+6. Format the question as multiple choice (2-4 options) with your recommended answer marked
 
 ## Output
 Write to .ai/brainstorm.md with sections:
+- **Human's idea:** [what they said]
+- **Existing context:** [what was already in the directory, if anything]
 - **Understanding:** What I think we're building
 - **Key Question:** The most important thing to clarify next (multiple choice)
 - **Recommendation:** Which option I'd pick and why
@@ -1029,8 +1038,9 @@ Report the current branch name and worktree location. No cleanup needed — the 
   // EDGES
   // ============================================================
 
-  // Phase 0: Brainstorm (Socratic loop with human)
-  Start -> ExploreIdea;
+  // Phase 0: Brainstorm (starts by asking the human what to build)
+  Start -> WhatAreWeBuilding;
+  WhatAreWeBuilding -> ExploreIdea;
   ExploreIdea -> HumanBrainstorm;
   HumanBrainstorm -> RefineUnderstanding;
   RefineUnderstanding -> CheckBrainstormDone;
