@@ -351,21 +351,29 @@ Three independent implementation plans exist. Synthesize them into one final pla
    - Architecture (2-3 sentences)
    - Tech stack (language, framework, key deps, test framework, linter)
 
+## Task Format
+Each task MUST be a markdown checkbox line at the top level:
+- [ ] task-001: Short title
+
+Followed by the detailed steps indented below it. Example:
+
+- [ ] task-001: Set up CLI entry point
+  1. Write failing test...
+  2. Implement...
+
+- [ ] task-002: Add URL fetching
+  1. Write failing test...
+
 ## Output
 Write the consolidated plan to docs/plans/plan.md
 
 ## Success Criteria
 - Single coherent plan with no contradictions
+- Every task is a top-level markdown checkbox (- [ ] task-NNN: title)
 - Every task has complete TDD steps
 - PARALLEL/SEQUENTIAL tags on every task
 - Plan header with tech stack identified
 "
-  ];
-
-  WriteLedger [
-    shape=parallelogram,
-    label="Create Task Ledger",
-    tool_command="set -eu\nmkdir -p docs/plans\nif [ ! -f docs/plans/ledger.tsv ]; then\n  printf 'task_id\\ttitle\\tstatus\\tcreated_at\\tupdated_at\\n' > docs/plans/ledger.tsv\nfi\nawk '/^## task-[0-9]/ || /^### task-[0-9]/' docs/plans/plan.md | sed 's/^##* //' | while read -r line; do\n  task_id=$(echo \"$line\" | grep -oE 'task-[0-9]+')\n  title=$(echo \"$line\" | sed \"s/$task_id[: ]*//'\")\n  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)\n  if ! grep -q \"$task_id\" docs/plans/ledger.tsv 2>/dev/null; then\n    printf '%s\\t%s\\tplanned\\t%s\\t%s\\n' \"$task_id\" \"$title\" \"$now\" \"$now\" >> docs/plans/ledger.tsv\n  fi\ndone\nprintf 'ledger-ready'"
   ];
 
   CommitPlan [
@@ -377,8 +385,8 @@ Write the consolidated plan to docs/plans/plan.md
     prompt="You are working in `run.working_dir`.
 
 Stage and commit the plan and all planning artifacts:
-git add docs/plans/plan.md docs/plans/plan-opus.md docs/plans/plan-gpt.md docs/plans/plan-gemini.md docs/plans/ledger.tsv
-git commit -m 'docs(plan): add consolidated implementation plan with task ledger'
+git add docs/plans/plan.md docs/plans/plan-opus.md docs/plans/plan-gpt.md docs/plans/plan-gemini.md
+git commit -m 'docs(plan): add consolidated implementation plan'
 
 Verify: git log --oneline -1
 "
@@ -439,7 +447,7 @@ Initialize the project based on the plan's tech stack section.
   PickNextTask [
     shape=parallelogram,
     label="Pick Next Task",
-    tool_command="set -eu\ntarget=$(awk -F '\\t' 'NR>1 && $3==\"planned\"{print $1; exit}' docs/plans/ledger.tsv)\nif [ -z \"$target\" ]; then\n  target=$(awk -F '\\t' 'NR>1 && $3==\"in_progress\"{print $1; exit}' docs/plans/ledger.tsv)\nfi\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nnow=$(date -u +%Y-%m-%dT%H:%M:%SZ)\nawk -F '\\t' -v OFS='\\t' -v target=\"$target\" -v now=\"$now\" '\nNR==1 {print; next}\n{ if ($1==target) { $3=\"in_progress\"; $4=now }; print }\n' docs/plans/ledger.tsv > docs/plans/ledger.tsv.tmp\nmv docs/plans/ledger.tsv.tmp docs/plans/ledger.tsv\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
+    tool_command="#!/bin/sh\nset -eu\ntarget=$(grep -oE 'task-[0-9]+' docs/plans/plan.md | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" docs/plans/plan.md; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
   ];
 
   // CheckTasksRemaining removed — routing directly from PickNextTask via tool_stdout
@@ -595,7 +603,7 @@ outcome=fail if FAIL
   MarkTaskComplete [
     shape=parallelogram,
     label="Mark Task Complete",
-    tool_command="set -eu\ntarget=$(cat docs/plans/current_task_id.txt)\nnow=$(date -u +%Y-%m-%dT%H:%M:%SZ)\nawk -F '\\t' -v OFS='\\t' -v target=\"$target\" -v now=\"$now\" '\nNR==1 {print; next}\n{ if ($1==target) { $3=\"completed\"; $4=now }; print }\n' docs/plans/ledger.tsv > docs/plans/ledger.tsv.tmp\nmv docs/plans/ledger.tsv.tmp docs/plans/ledger.tsv\nprintf 'completed-%s' \"$target\""
+    tool_command="#!/bin/sh\nset -eu\ntarget=$(cat docs/plans/current_task_id.txt)\nsed -i.bak \"s/^- \\[ \\] ${target}/- [x] ${target}/\" docs/plans/plan.md\nrm -f docs/plans/plan.md.bak\nprintf 'completed-%s' \"$target\""
   ];
 
   // ============================================================
@@ -667,7 +675,7 @@ The current task has failed implementation AND debugging. Rethink the approach.
 1. Analyze what went wrong — was the task spec flawed? Dependencies missing? Wrong approach?
 2. Write a revised task spec that addresses the root cause
 3. Update docs/plans/plan.md with the revised task
-4. Reset the task status in docs/plans/ledger.tsv to 'planned'
+4. Reset the task checkbox in docs/plans/plan.md back to unchecked: - [ ] task-xxx
 
 ## Output
 outcome=success if task successfully replanned
@@ -693,7 +701,7 @@ outcome=fail if the problem is fundamental and needs human input
 The human provided guidance to unblock the current task. Incorporate their feedback:
 1. Read the human's input from previous context
 2. Update docs/plans/plan.md if the task spec needs to change
-3. Reset the current task to 'planned' in docs/plans/ledger.tsv if replanning was needed
+3. Reset the current task checkbox in docs/plans/plan.md to unchecked if replanning was needed
 4. Report what was updated so the implementation loop can resume
 "
   ];
@@ -1043,8 +1051,7 @@ Report the current branch name and worktree location. No cleanup needed — the 
   PlanGPT -> PlanJoin;
   PlanGemini -> PlanJoin;
   PlanJoin -> ConsolidatePlan;
-  ConsolidatePlan -> WriteLedger;
-  WriteLedger -> CommitPlan;
+  ConsolidatePlan -> CommitPlan;
 
   // Phase 3: Setup
   CommitPlan -> SetupProject;
