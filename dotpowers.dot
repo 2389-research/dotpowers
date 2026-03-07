@@ -24,6 +24,24 @@ digraph dotpowers {
   // PHASE 0 — EXPLORE IDEA  (superpowers:brainstorming — understand the idea)
   // ============================================================
 
+  CheckForSpec [
+    shape=parallelogram,
+    label="Check for Existing Spec",
+    command="set -eu\nmkdir -p .ai\nfound=0\nfor f in README* readme* SPEC* spec* REQUIREMENTS* requirements* *.md docs/*.md .ai/design-brief.md; do\n  if [ -f \"$f\" ] 2>/dev/null; then\n    found=1\n    break\n  fi\ndone\nif [ \"$found\" -eq 1 ]; then\n  printf 'has_spec'\nelse\n  count=$(find . -maxdepth 2 -type f -not -path './.git/*' -not -path './.ai/*' | head -5 | wc -l | tr -d ' ')\n  if [ \"$count\" -gt 0 ]; then\n    printf 'has_files'\n  else\n    printf 'empty_directory'\n  fi\nfi"
+  ];
+
+  CheckHasContext [
+    shape=diamond,
+    label="Has Existing Context?",
+    prompt="You are working in `run.working_dir`.
+
+Check the output from the previous tool node.
+
+If the output is 'has_spec' or 'has_files': outcome=has_context (skip to ExploreIdea)
+If the output is 'empty_directory': outcome=empty (ask the human what to build)
+"
+  ];
+
   WhatAreWeBuilding [
     shape=hexagon,
     type="wait.human",
@@ -1038,8 +1056,11 @@ Report the current branch name and worktree location. No cleanup needed — the 
   // EDGES
   // ============================================================
 
-  // Phase 0: Brainstorm (starts by asking the human what to build)
-  Start -> WhatAreWeBuilding;
+  // Phase 0: Brainstorm (check for existing context, ask human only if empty)
+  Start -> CheckForSpec;
+  CheckForSpec -> CheckHasContext;
+  CheckHasContext -> ExploreIdea [label="has context", condition="outcome=has_context", weight=2];
+  CheckHasContext -> WhatAreWeBuilding [label="empty dir", condition="outcome=empty"];
   WhatAreWeBuilding -> ExploreIdea;
   ExploreIdea -> HumanBrainstorm;
   HumanBrainstorm -> RefineUnderstanding;
