@@ -24,18 +24,6 @@ digraph dotpowers {
   // PHASE 0 — EXPLORE IDEA  (superpowers:brainstorming — understand the idea)
   // ============================================================
 
-  CheckForSpec [
-    shape=parallelogram,
-    label="Check for Existing Spec",
-    tool_command="#!/bin/sh\nset -eu\nmkdir -p docs/plans\nfound=0\n# Look for a real spec: README/SPEC/REQUIREMENTS with >3 lines\nfor pattern in 'README*' 'readme*' 'SPEC*' 'spec*' 'REQUIREMENTS*' 'requirements*'; do\n  for f in $(ls -1 $pattern 2>/dev/null); do\n    if [ -f \"$f\" ]; then\n      lines=$(wc -l < \"$f\" | tr -d ' ')\n      if [ \"$lines\" -gt 3 ]; then\n        found=1\n        break 2\n      fi\n    fi\n  done\ndone\n# Check for substantial markdown docs (not our own artifacts)\nif [ \"$found\" -eq 0 ]; then\n  for f in $(ls -1 *.md docs/*.md 2>/dev/null); do\n    if [ -f \"$f\" ]; then\n      case \"$f\" in\n        docs/plans/brainstorm.md|docs/plans/design-brief.md) continue ;;\n      esac\n      lines=$(wc -l < \"$f\" | tr -d ' ')\n      if [ \"$lines\" -gt 3 ]; then\n        found=1\n        break\n      fi\n    fi\n  done\nfi\nif [ \"$found\" -eq 1 ]; then\n  printf 'has_context'\nelse\n  printf 'empty_directory'\nfi"
-  ];
-
-  WhatAreWeBuilding [
-    shape=hexagon,
-    mode="freeform",
-    label="What are we building?"
-  ];
-
   ExploreIdea [
     shape=box,
     label="Explore Idea",
@@ -48,21 +36,26 @@ digraph dotpowers {
 You are a senior software architect starting a brainstorm session.
 
 ## Task
-Read whatever exists in the working directory — could be a spec, README, existing code, or the human may have just described their idea. Your job is to understand what we're building.
+Explore the working directory to understand what we're building. Read EVERYTHING — idea docs, specs, READMEs, existing code, config files. Your job is to absorb all available context before asking the human anything.
 
 ## Process
-1. First, delete any stale brainstorm artifacts: rm -f docs/plans/brainstorm.md docs/plans/design-brief.md
-2. Read any human input from context (they may have described what to build)
-3. Read all files in the working directory for additional context
-4. Summarize what you understand so far about the project
-5. Identify the SINGLE most important open question — the one that would most change the design if answered differently
-6. Write your understanding and your question to docs/plans/brainstorm.md
-7. Format the question as multiple choice (2-4 options) with your recommended answer marked
+1. Delete any stale brainstorm artifacts: rm -f docs/plans/brainstorm.md docs/plans/design-brief.md
+2. List all files in the working directory (ls -la, and ls any subdirectories)
+3. Read every file that could describe the project (*.md, README*, SPEC*, idea*, etc.)
+4. Read any source code files to understand existing implementation
+5. Summarize what you understand so far
+6. Identify the SINGLE most important open question — the one that would most change the design if answered differently
+7. Write your understanding and question to docs/plans/brainstorm.md
+8. Format the question as multiple choice (2-4 options) with your recommended answer marked
+
+## Important
+- Do NOT ask the human to describe the project if there are files that already describe it
+- If the directory is truly empty (no files at all), your question should be: what are we building?
+- If there IS context, your question should dig deeper into a specific design decision
 
 ## Output
 Write to docs/plans/brainstorm.md with sections:
-- **Human's idea:** [what they said]
-- **Existing context:** [what was already in the directory, if anything]
+- **Existing context:** [what was already in the directory]
 - **Understanding:** What I think we're building
 - **Key Question:** The most important thing to clarify next (multiple choice)
 - **Recommendation:** Which option I'd pick and why
@@ -1049,10 +1042,7 @@ Report the current branch name and worktree location. No cleanup needed — the 
   // ============================================================
 
   // Phase 0: Brainstorm (check for existing context, ask human only if empty)
-  Start -> CheckForSpec;
-  CheckForSpec -> ExploreIdea [label="has context", condition="context.tool_stdout=has_context", weight=2];
-  CheckForSpec -> WhatAreWeBuilding [label="empty dir", condition="context.tool_stdout=empty_directory"];
-  WhatAreWeBuilding -> ExploreIdea;
+  Start -> ExploreIdea;
   ExploreIdea -> HumanBrainstorm;
   HumanBrainstorm -> RefineUnderstanding;
   RefineUnderstanding -> CheckBrainstormDone;
