@@ -1,0 +1,1046 @@
+digraph dotpowers {
+  graph [
+    label="dotpowers — Superpowers as a Mammoth Pipeline",
+    goal="Given a project spec, autonomously brainstorm, plan, implement with TDD, review via multi-model consensus, and ship working software.",
+    rankdir=LR,
+    default_max_retry=2,
+    retry_target="ImplementTask",
+    fallback_retry_target="RefineBrief",
+    default_fidelity="summary:high",
+    model_stylesheet="
+      * { llm_model: claude-opus-4-6; llm_provider: anthropic; reasoning_effort: high; }
+      .implement { llm_model: gpt-5.4; llm_provider: openai; reasoning_effort: high; }
+      .opinion { llm_model: gemini-3.5-flash; llm_provider: gemini; reasoning_effort: high; }
+    "
+  ];
+
+  // ============================================================
+  // TERMINALS
+  // ============================================================
+  Start [shape=Mdiamond, label="Start"];
+  Exit  [shape=Msquare,  label="Exit"];
+
+  // ============================================================
+  // PHASE 1 — BRAINSTORM  (superpowers:brainstorming)
+  // ============================================================
+
+  RefineBrief [
+    shape=box,
+    label="Refine Brief",
+    goal_gate=true,
+    retry_target="RefineBrief",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior software architect conducting a design brainstorm.
+
+## Task
+Refine the project spec into a structured design brief. The input spec may be terse or ambiguous — your job is to fill gaps, identify risks, and produce a clear blueprint.
+
+## Process
+1. Read any existing spec, README, or requirements in the working directory
+2. Identify: purpose, constraints, non-goals, success criteria
+3. Propose 2-3 architectural approaches with trade-offs
+4. Select the recommended approach with justification
+5. YAGNI ruthlessly — cut anything not strictly needed for v1
+6. Produce a structured design brief covering:
+   - Architecture (components, data flow, key decisions)
+   - Tech stack with rationale
+   - Error handling strategy
+   - Testing strategy (determine appropriate test framework for the language)
+   - Component breakdown with dependencies marked
+   - Which components can be built in parallel vs must be sequential
+
+## Output
+Write the design brief to .ai/design-brief.md
+
+## Ambiguity Check
+At the end, honestly assess: are there critical ambiguities that could lead to building the wrong thing? If YES, end your response with exactly: NEEDS_CLARIFICATION. If the spec is clear enough to proceed, end with exactly: READY_TO_PLAN.
+
+## Success Criteria
+- .ai/design-brief.md exists with all sections filled
+- Final line is either NEEDS_CLARIFICATION or READY_TO_PLAN
+"
+  ];
+
+  CheckClarification [
+    shape=diamond,
+    label="Needs Clarification?",
+    prompt="You are working in `run.working_dir`.
+
+Read .ai/design-brief.md and check the last line.
+
+If it ends with NEEDS_CLARIFICATION: outcome=clarify
+If it ends with READY_TO_PLAN: outcome=success
+"
+  ];
+
+  HumanClarify [
+    shape=hexagon,
+    type="wait.human",
+    label="Clarify Ambiguities"
+  ];
+
+  IncorporateFeedback [
+    shape=box,
+    label="Incorporate Feedback",
+    goal_gate=true,
+    retry_target="IncorporateFeedback",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+The human provided clarifying answers to ambiguities in the design brief. Incorporate their feedback.
+
+## Process
+1. Read .ai/design-brief.md
+2. Read the human's clarifying input from the previous context
+3. Update the design brief with resolved ambiguities
+4. Re-assess: are there still critical ambiguities?
+5. End with NEEDS_CLARIFICATION or READY_TO_PLAN
+
+## Output
+Overwrite .ai/design-brief.md with the updated brief.
+"
+  ];
+
+  CommitBrief [
+    shape=box,
+    class="implement",
+    label="Commit Brief",
+    goal_gate=true,
+    retry_target="CommitBrief",
+    prompt="You are working in `run.working_dir`.
+
+Stage and commit the design brief:
+git add .ai/design-brief.md
+git commit -m 'docs(design): add project design brief'
+
+Verify: git log --oneline -1
+"
+  ];
+
+  // ============================================================
+  // PHASE 2 — PLAN  (superpowers:writing-plans)
+  //   Multi-model consensus planning
+  // ============================================================
+
+  PlanFanOut [shape=component, label="Plan (Parallel)"];
+
+  PlanOpus [
+    shape=box,
+    label="Plan (Opus)",
+    goal_gate=true,
+    retry_target="PlanOpus",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior architect creating an implementation plan.
+
+## Context
+Read .ai/design-brief.md for the project design.
+
+## Task
+Create a detailed, step-by-step implementation plan. Write plans assuming the engineer has ZERO context and questionable taste. Document everything.
+
+## Plan Structure
+For each task (one action, 2-5 minutes each):
+- **Files:** exact paths to create/modify/test
+- **Step 1:** Write the failing test (complete code, not pseudocode)
+- **Step 2:** Run test to verify it fails (exact command + expected output)
+- **Step 3:** Write minimal implementation (complete code)
+- **Step 4:** Run test to verify it passes (exact command + expected output)
+- **Step 5:** Commit (exact git command + message in conventional commit format)
+
+## Requirements
+- Each step is ONE action — 'write test' and 'run test' are separate steps
+- Exact file paths always
+- Complete code in plan, never 'add validation' or 'implement logic'
+- Exact commands with expected output
+- Tag each task as PARALLEL or SEQUENTIAL based on dependencies
+- Identify the test framework appropriate for the project's language
+- Include setup tasks (project init, deps, tooling) before implementation tasks
+
+## Output
+Write your plan to .ai/plan-opus.md
+"
+  ];
+
+  PlanGPT [
+    shape=box,
+    class="implement",
+    label="Plan (GPT-5.4)",
+    goal_gate=true,
+    retry_target="PlanGPT",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior architect creating an implementation plan.
+
+## Context
+Read .ai/design-brief.md for the project design.
+
+## Task
+Create a detailed, step-by-step implementation plan. Write plans assuming the engineer has ZERO context and questionable taste. Document everything.
+
+## Plan Structure
+For each task (one action, 2-5 minutes each):
+- **Files:** exact paths to create/modify/test
+- **Step 1:** Write the failing test (complete code, not pseudocode)
+- **Step 2:** Run test to verify it fails (exact command + expected output)
+- **Step 3:** Write minimal implementation (complete code)
+- **Step 4:** Run test to verify it passes (exact command + expected output)
+- **Step 5:** Commit (exact git command + message in conventional commit format)
+
+## Requirements
+- Each step is ONE action
+- Exact file paths always
+- Complete code in plan
+- Exact commands with expected output
+- Tag each task as PARALLEL or SEQUENTIAL
+- Identify appropriate test framework for the language
+- Focus on pragmatic, minimal implementations
+
+## Output
+Write your plan to .ai/plan-gpt.md
+"
+  ];
+
+  PlanGemini [
+    shape=box,
+    class="opinion",
+    label="Plan (Gemini)",
+    goal_gate=true,
+    retry_target="PlanGemini",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior architect creating an implementation plan.
+
+## Context
+Read .ai/design-brief.md for the project design.
+
+## Task
+Create a detailed, step-by-step implementation plan. Write plans assuming the engineer has ZERO context and questionable taste. Document everything.
+
+## Plan Structure
+For each task (one action, 2-5 minutes each):
+- **Files:** exact paths to create/modify/test
+- **Step 1:** Write the failing test (complete code)
+- **Step 2:** Run test to verify it fails (exact command + expected output)
+- **Step 3:** Write minimal implementation (complete code)
+- **Step 4:** Run test to verify it passes (exact command + expected output)
+- **Step 5:** Commit (exact git command + message)
+
+## Requirements
+- Each step is ONE action
+- Exact file paths always
+- Complete code in plan
+- Exact commands with expected output
+- Tag each task as PARALLEL or SEQUENTIAL
+- Focus on risk identification and edge cases
+
+## Output
+Write your plan to .ai/plan-gemini.md
+"
+  ];
+
+  PlanJoin [shape=tripleoctagon, label="Plans Join"];
+
+  ConsolidatePlan [
+    shape=box,
+    label="Consolidate Plan",
+    goal_gate=true,
+    retry_target="ConsolidatePlan",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+Three independent implementation plans exist. Synthesize them into one final plan.
+
+## Process
+1. Read .ai/plan-opus.md, .ai/plan-gpt.md, .ai/plan-gemini.md
+2. For each task area, select the strongest approach across all three plans
+3. Resolve conflicts — prefer the approach with better test coverage
+4. Preserve PARALLEL/SEQUENTIAL tags (task is PARALLEL only if ALL three plans agree it's independent)
+5. Assign each task a sequential ID: task-001, task-002, etc.
+6. Ensure every task has complete code, exact commands, and exact file paths
+7. Add a mandatory plan header:
+   - Goal (one sentence)
+   - Architecture (2-3 sentences)
+   - Tech stack (language, framework, key deps, test framework, linter)
+
+## Output
+Write the consolidated plan to .ai/plan.md
+
+## Success Criteria
+- Single coherent plan with no contradictions
+- Every task has complete TDD steps
+- PARALLEL/SEQUENTIAL tags on every task
+- Plan header with tech stack identified
+"
+  ];
+
+  WriteLedger [
+    shape=parallelogram,
+    label="Create Task Ledger",
+    command="set -eu\nmkdir -p .ai\nif [ ! -f .ai/ledger.tsv ]; then\n  printf 'task_id\\ttitle\\tstatus\\tcreated_at\\tupdated_at\\n' > .ai/ledger.tsv\nfi\nawk '/^## task-[0-9]/ || /^### task-[0-9]/' .ai/plan.md | sed 's/^##* //' | while read -r line; do\n  task_id=$(echo \"$line\" | grep -oE 'task-[0-9]+')\n  title=$(echo \"$line\" | sed \"s/$task_id[: ]*//'\")\n  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)\n  if ! grep -q \"$task_id\" .ai/ledger.tsv 2>/dev/null; then\n    printf '%s\\t%s\\tplanned\\t%s\\t%s\\n' \"$task_id\" \"$title\" \"$now\" \"$now\" >> .ai/ledger.tsv\n  fi\ndone\nprintf 'ledger-ready'"
+  ];
+
+  CommitPlan [
+    shape=box,
+    class="implement",
+    label="Commit Plan",
+    goal_gate=true,
+    retry_target="CommitPlan",
+    prompt="You are working in `run.working_dir`.
+
+Stage and commit the plan and all planning artifacts:
+git add .ai/plan.md .ai/plan-opus.md .ai/plan-gpt.md .ai/plan-gemini.md .ai/ledger.tsv
+git commit -m 'docs(plan): add consolidated implementation plan with task ledger'
+
+Verify: git log --oneline -1
+"
+  ];
+
+  // ============================================================
+  // PHASE 3 — SETUP  (superpowers:using-git-worktrees)
+  // ============================================================
+
+  SetupProject [
+    shape=box,
+    class="implement",
+    label="Setup Project",
+    goal_gate=true,
+    retry_target="SetupProject",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+Initialize the project based on the plan's tech stack section.
+
+## Process
+1. Read .ai/plan.md — extract the tech stack from the plan header
+2. Initialize the project for the identified language/framework:
+   - Python: uv init (if no pyproject.toml), uv add deps, uv add --dev test/lint deps
+   - Node: npm init, npm install deps
+   - Go: go mod init
+   - Rust: cargo init
+   - (adapt for other languages as needed)
+3. Set up quality tooling based on the language:
+   - Python: ruff, mypy, pre-commit
+   - Node: eslint/biome, prettier, typescript
+   - Go: golangci-lint, go vet
+   - Rust: clippy, rustfmt
+   - (adapt as needed)
+4. Configure pre-commit hooks if the ecosystem supports it
+5. Create initial directory structure per the plan
+6. Run the test command to verify it works (even with 0 tests)
+7. Commit: git add -A && git commit -m 'chore(setup): initialize project with deps and tooling'
+
+## Success Criteria
+- Project initializes cleanly
+- Quality tools configured and runnable
+- Test framework runs (even if 0 tests)
+- All committed
+"
+  ];
+
+  VerifyBaseline [
+    shape=parallelogram,
+    label="Verify Baseline",
+    command="set -eu\nif [ -f pyproject.toml ]; then\n  uv run pytest --co -q 2>/dev/null || uv run python -m pytest --co -q 2>/dev/null || echo 'no-tests-yet'\n  printf 'baseline-verified-python'\nelif [ -f package.json ]; then\n  npm test 2>/dev/null || echo 'no-tests-yet'\n  printf 'baseline-verified-node'\nelif [ -f go.mod ]; then\n  go build ./... 2>&1 || true\n  go test ./... 2>&1 || echo 'no-tests-yet'\n  printf 'baseline-verified-go'\nelif [ -f Cargo.toml ]; then\n  cargo build 2>&1 || true\n  cargo test 2>&1 || echo 'no-tests-yet'\n  printf 'baseline-verified-rust'\nelse\n  printf 'baseline-verified-unknown'\nfi"
+  ];
+
+  // ============================================================
+  // PHASE 4 — IMPLEMENT LOOP  (superpowers:subagent-driven-development + TDD)
+  // ============================================================
+
+  PickNextTask [
+    shape=parallelogram,
+    label="Pick Next Task",
+    command="set -eu\ntarget=$(awk -F '\\t' 'NR>1 && $3==\"planned\"{print $1; exit}' .ai/ledger.tsv)\nif [ -z \"$target\" ]; then\n  target=$(awk -F '\\t' 'NR>1 && $3==\"in_progress\"{print $1; exit}' .ai/ledger.tsv)\nfi\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nnow=$(date -u +%Y-%m-%dT%H:%M:%SZ)\nawk -F '\\t' -v OFS='\\t' -v target=\"$target\" -v now=\"$now\" '\nNR==1 {print; next}\n{ if ($1==target) { $3=\"in_progress\"; $4=now }; print }\n' .ai/ledger.tsv > .ai/ledger.tsv.tmp\nmv .ai/ledger.tsv.tmp .ai/ledger.tsv\nprintf '%s' \"$target\" > .ai/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
+  ];
+
+  CheckTasksRemaining [
+    shape=diamond,
+    label="Tasks Remaining?",
+    prompt="You are working in `run.working_dir`.
+
+Check if there are remaining tasks.
+
+Read the output from the previous tool node.
+If the output contains 'all_complete': outcome=complete
+If the output contains 'next_task-': outcome=has_task
+"
+  ];
+
+  ImplementTask [
+    shape=box,
+    class="implement",
+    label="Implement Task (TDD)",
+    goal_gate=true,
+    retry_target="ImplementTask",
+    max_retries=2,
+    fidelity="full",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a disciplined software engineer implementing a single task using strict TDD.
+
+## IRON LAW: NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
+Write code before the test? Delete it. Start over. No exceptions.
+- Don't keep it as 'reference'
+- Don't 'adapt' it while writing tests
+- Delete means delete
+
+## Context
+1. Read .ai/plan.md — find the task matching the ID in .ai/current_task_id.txt
+2. Read the task's complete specification including all code and commands
+
+## Process — RED GREEN REFACTOR
+### RED — Write Failing Test
+1. Write ONE minimal test showing what should happen
+2. One behavior per test, clear descriptive name
+3. Use real code — no mocks unless absolutely unavoidable
+4. Run the test: confirm it FAILS
+5. Confirm it fails because the feature is missing, not due to typos or imports
+
+### GREEN — Write Minimal Implementation
+1. Write the SIMPLEST code to make the test pass
+2. Do NOT add features, refactor, or 'improve' beyond the test
+3. Run the test: confirm it PASSES
+4. Confirm ALL other tests still pass
+5. Confirm output is pristine — no errors, no warnings
+
+### REFACTOR (only after green)
+1. Remove duplication, improve names, extract helpers
+2. Keep tests green throughout
+3. Do NOT add new behavior during refactor
+
+### COMMIT
+Run the project's linter and formatter. Fix all issues.
+git add -A && git commit -m '<type>(<scope>): <description>'
+
+## Self-Review Checklist
+Before finishing, honestly assess:
+- Completeness: fully implemented everything in the task spec? Missed requirements? Edge cases?
+- Quality: clear names? clean and maintainable?
+- Discipline: avoided overbuilding (YAGNI)? only built what was requested?
+- Testing: tests verify behavior (not mocks)? TDD followed strictly?
+
+## Forbidden Rationalizations
+- 'Too simple to test' — simple code breaks. Test takes 30 seconds.
+- 'I'll test after' — tests passing immediately prove nothing.
+- 'Need to explore first' — fine, but throw away exploration and start with TDD.
+- 'Test is hard to write = design unclear' — listen to the test.
+
+## Success Criteria
+- Failing test written FIRST, verified failing
+- Minimal implementation passes the test
+- All existing tests still pass
+- Linter/formatter clean
+- Committed with conventional commit message
+"
+  ];
+
+  SpecReview [
+    shape=box,
+    label="Spec Compliance Review",
+    goal_gate=true,
+    retry_target="ImplementTask",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a meticulous spec compliance reviewer.
+
+## CRITICAL FRAMING
+The implementer finished suspiciously quickly. Their work may be incomplete, inaccurate, or optimistic. You MUST verify everything independently.
+
+## Context
+1. Read .ai/plan.md — find the task matching the ID in .ai/current_task_id.txt
+2. Read the ACTUAL implementation code (git diff HEAD~1 to see what changed)
+
+## Verification Process
+DO NOT take the implementer's word for anything. DO NOT trust completeness claims.
+
+1. Read actual code files — every line changed
+2. Compare implementation to task requirements LINE BY LINE
+3. Check for:
+   - **Missing requirements:** Did they implement everything? Skip requirements? Claim something works but didn't implement?
+   - **Extra/unneeded work:** Built things not requested? Over-engineered? Added 'nice to haves'?
+   - **Misunderstandings:** Interpreted requirements differently? Solved wrong problem?
+4. Run the tests yourself to verify they actually pass
+5. Verify TDD was followed: check git log for test commit before implementation commit
+
+## Output
+If spec compliant: state PASS with evidence (specific code references)
+If issues found: state FAIL with exact file:line references for each issue
+
+outcome=success if PASS
+outcome=fail if FAIL (will route back to implementation)
+"
+  ];
+
+  QualityReview [
+    shape=box,
+    class="implement",
+    label="Code Quality Review",
+    goal_gate=true,
+    retry_target="ImplementTask",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior code reviewer focused on quality, patterns, and maintainability.
+
+## Prerequisite
+This review only runs AFTER spec compliance has passed. The code is functionally correct — now assess quality.
+
+## Context
+1. Read .ai/current_task_id.txt for the task being reviewed
+2. Read the changed files: git diff HEAD~1
+3. Read .ai/plan.md for architectural context
+
+## Review Dimensions
+1. **Code Quality:** naming, readability, error handling, type safety, defensive programming
+2. **Patterns:** consistency with existing codebase patterns, DRY, separation of concerns
+3. **Architecture:** SOLID principles, loose coupling, appropriate abstraction level
+4. **Security:** input validation, injection risks, secrets handling
+5. **Testing:** test quality (not just coverage), edge cases, meaningful assertions
+6. **Performance:** obvious inefficiencies, N+1 queries, unnecessary allocations
+
+## Issue Categories
+- **Critical** (must fix): security vulnerabilities, data loss risks, broken functionality
+- **Important** (should fix): poor patterns, maintainability concerns, missing error handling
+- **Suggestion** (nice to have): style improvements, minor optimizations
+
+## Output
+If no Critical or Important issues: PASS
+If Critical or Important issues found: FAIL with file:line references and fix guidance
+
+outcome=success if PASS
+outcome=fail if FAIL
+"
+  ];
+
+  MarkTaskComplete [
+    shape=parallelogram,
+    label="Mark Task Complete",
+    command="set -eu\ntarget=$(cat .ai/current_task_id.txt)\nnow=$(date -u +%Y-%m-%dT%H:%M:%SZ)\nawk -F '\\t' -v OFS='\\t' -v target=\"$target\" -v now=\"$now\" '\nNR==1 {print; next}\n{ if ($1==target) { $3=\"completed\"; $4=now }; print }\n' .ai/ledger.tsv > .ai/ledger.tsv.tmp\nmv .ai/ledger.tsv.tmp .ai/ledger.tsv\nprintf 'completed-%s' \"$target\""
+  ];
+
+  // ============================================================
+  // PHASE 4 — ESCALATION PATH  (superpowers:systematic-debugging)
+  // ============================================================
+
+  DebugInvestigate [
+    shape=box,
+    label="Debug Investigation",
+    max_retries=2,
+    retry_target="ReplanTask",
+    fidelity="full",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior debugger performing root cause analysis.
+
+## IRON LAW: NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
+If you haven't completed the investigation, you cannot propose fixes.
+
+## Context
+The implementation for the task in .ai/current_task_id.txt has failed after multiple attempts.
+
+## Phase 1: Root Cause Investigation
+1. Read error messages carefully — full stack traces, line numbers, error codes
+2. Reproduce the failure: run the exact failing command
+3. Check recent changes: git diff, git log --oneline -5
+4. Trace data flow: where does the bad value originate? Trace backward
+
+## Phase 2: Pattern Analysis
+1. Find working examples in the same codebase
+2. Compare working vs broken — identify EVERY difference
+3. Understand dependencies and assumptions
+
+## Phase 3: Hypothesis and Testing
+1. Form ONE hypothesis: 'I think X is the root cause because Y'
+2. Test with the SMALLEST possible change — one variable at a time
+3. If fix works: write a regression test, commit, report success
+4. If fix doesn't work: form a NEW hypothesis — do NOT pile on more fixes
+
+## CRITICAL: >= 3 failed attempts means WRONG ARCHITECTURE
+If you've tried 3+ fixes and each reveals new coupling or shared state:
+- This is NOT a failed hypothesis — this is a wrong architecture
+- Report ARCHITECTURE_ISSUE and describe what's fundamentally broken
+- outcome=fail to escalate to replanning
+
+## Output
+outcome=success if root cause found and fixed with regression test
+outcome=fail if architecture issue or unable to resolve
+"
+  ];
+
+  ReplanTask [
+    shape=box,
+    label="Replan Task",
+    max_retries=1,
+    retry_target="HumanHelp",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+The current task has failed implementation AND debugging. Rethink the approach.
+
+## Context
+1. Read .ai/current_task_id.txt for the task
+2. Read .ai/plan.md for the original task spec
+3. Read git log to understand what was tried and why it failed
+
+## Process
+1. Analyze what went wrong — was the task spec flawed? Dependencies missing? Wrong approach?
+2. Write a revised task spec that addresses the root cause
+3. Update .ai/plan.md with the revised task
+4. Reset the task status in .ai/ledger.tsv to 'planned'
+
+## Output
+outcome=success if task successfully replanned
+outcome=fail if the problem is fundamental and needs human input
+"
+  ];
+
+  HumanHelp [
+    shape=hexagon,
+    type="wait.human",
+    label="Need Human Help"
+  ];
+
+  ResumeAfterHelp [
+    shape=box,
+    class="implement",
+    label="Resume After Help",
+    goal_gate=true,
+    retry_target="ResumeAfterHelp",
+    prompt="You are working in `run.working_dir`.
+
+The human provided guidance to unblock the current task. Incorporate their feedback:
+1. Read the human's input from previous context
+2. Update .ai/plan.md if the task spec needs to change
+3. Reset the current task to 'planned' in .ai/ledger.tsv if replanning was needed
+4. Report what was updated so the implementation loop can resume
+"
+  ];
+
+  // ============================================================
+  // PHASE 5 — FINAL REVIEW  (superpowers:verification-before-completion +
+  //                           superpowers:requesting-code-review)
+  // ============================================================
+
+  ValidateBuild [
+    shape=parallelogram,
+    label="Validate Full Build",
+    command="set -eu\necho '=== Running full validation ==='\nif [ -f pyproject.toml ]; then\n  echo '--- pytest ---'\n  uv run pytest -v 2>&1 || { echo 'PYTEST_FAIL'; exit 1; }\n  echo '--- ruff ---'\n  uv run ruff check . 2>&1 || { echo 'RUFF_FAIL'; exit 1; }\n  echo '--- mypy ---'\n  uv run mypy . 2>&1 || echo 'mypy-skipped'\n  printf 'validation-pass'\nelif [ -f package.json ]; then\n  echo '--- npm test ---'\n  npm test 2>&1 || { echo 'TEST_FAIL'; exit 1; }\n  echo '--- lint ---'\n  npx eslint . 2>&1 || npx biome check . 2>&1 || echo 'lint-skipped'\n  printf 'validation-pass'\nelif [ -f go.mod ]; then\n  echo '--- go build ---'\n  go build ./... 2>&1 || { echo 'BUILD_FAIL'; exit 1; }\n  echo '--- go test ---'\n  go test ./... 2>&1 || { echo 'TEST_FAIL'; exit 1; }\n  echo '--- go vet ---'\n  go vet ./... 2>&1 || echo 'vet-skipped'\n  printf 'validation-pass'\nelif [ -f Cargo.toml ]; then\n  echo '--- cargo build ---'\n  cargo build 2>&1 || { echo 'BUILD_FAIL'; exit 1; }\n  echo '--- cargo test ---'\n  cargo test 2>&1 || { echo 'TEST_FAIL'; exit 1; }\n  echo '--- cargo clippy ---'\n  cargo clippy 2>&1 || echo 'clippy-skipped'\n  printf 'validation-pass'\nelse\n  echo 'Unknown build system — manual validation needed'\n  printf 'validation-unknown'\nfi"
+  ];
+
+  ReviewFanOut [shape=component, label="Final Reviews (Parallel)"];
+
+  FinalReviewOpus [
+    shape=box,
+    label="Final Review (Opus)",
+    goal_gate=true,
+    retry_target="FinalReviewOpus",
+    fidelity="summary:high",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior code reviewer performing final review of the complete implementation.
+
+## IRON LAW: NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
+Run commands. Read output. Check exit codes. THEN make claims.
+Forbidden words: 'should', 'probably', 'seems to'.
+
+## Context
+1. Read .ai/plan.md for the original requirements
+2. Run: git log --oneline to see all commits
+3. Run: git diff main...HEAD (or first commit) to see all changes
+
+## Review Dimensions
+1. **Plan Alignment:** Compare implementation to plan. Identify deviations — justified improvements vs problematic departures. Verify ALL planned functionality implemented.
+2. **Code Quality:** Patterns, error handling, type safety, naming, maintainability
+3. **Architecture:** SOLID, separation of concerns, loose coupling
+4. **Test Coverage:** Are edge cases covered? Are tests meaningful or trivial?
+5. **Security:** Input validation, injection risks, secrets handling
+
+## Output
+For each issue found, provide: severity (Critical/Important/Suggestion), file:line, description, fix guidance.
+
+Return PASS/FAIL with detailed reasoning.
+"
+  ];
+
+  FinalReviewGPT [
+    shape=box,
+    class="implement",
+    label="Final Review (GPT-5.4)",
+    goal_gate=true,
+    retry_target="FinalReviewGPT",
+    fidelity="summary:high",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior code reviewer performing final review of the complete implementation.
+
+## Context
+1. Read .ai/plan.md for the original requirements
+2. Run: git log --oneline to see all commits
+3. Run: git diff main...HEAD (or first commit) to see all changes
+
+## Review Focus
+1. **Completeness:** Is every planned feature implemented? Any gaps?
+2. **Quality:** Code patterns, error handling, naming conventions
+3. **Testing:** Coverage, edge cases, test quality
+4. **Performance:** Obvious inefficiencies, resource leaks
+5. **Security:** OWASP top 10, input validation
+
+## Output
+For each issue: severity (Critical/Important/Suggestion), file:line, description, fix guidance.
+Return PASS/FAIL with reasoning.
+"
+  ];
+
+  FinalReviewGemini [
+    shape=box,
+    class="opinion",
+    label="Final Review (Gemini)",
+    goal_gate=true,
+    retry_target="FinalReviewGemini",
+    fidelity="summary:high",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior code reviewer performing final review of the complete implementation.
+
+## Context
+1. Read .ai/plan.md for the original requirements
+2. Run: git log --oneline to see all commits
+3. Run: git diff main...HEAD (or first commit) to see all changes
+
+## Review Focus
+1. **Delivery Robustness:** Will this work reliably in production?
+2. **Test Coverage:** Are tests comprehensive and meaningful?
+3. **Edge Cases:** What could go wrong? Missing error handling?
+4. **Documentation:** Is the code self-documenting? Missing comments on complex logic?
+
+## Output
+For each issue: severity (Critical/Important/Suggestion), file:line, description, fix guidance.
+Return PASS/FAIL with reasoning.
+"
+  ];
+
+  ReviewsJoin [shape=tripleoctagon, label="Reviews Join"];
+
+  CritiqueFanOut [shape=component, label="Cross-Critiques (Parallel)"];
+
+  CritiqueOpusOnGPT [
+    shape=box,
+    label="Opus Critiques GPT Review",
+    goal_gate=true,
+    retry_target="CritiqueOpusOnGPT",
+    prompt="You are working in `run.working_dir`.
+
+Critique the GPT-5.4 review for missing checks, weak evidence, or mistaken conclusions. Are there issues they missed? Did they flag false positives? Be specific with file:line references."
+  ];
+
+  CritiqueOpusOnGemini [
+    shape=box,
+    label="Opus Critiques Gemini Review",
+    goal_gate=true,
+    retry_target="CritiqueOpusOnGemini",
+    prompt="You are working in `run.working_dir`.
+
+Critique the Gemini review for missing checks, weak evidence, or mistaken conclusions. Are there issues they missed? Did they flag false positives? Be specific with file:line references."
+  ];
+
+  CritiqueGPTOnOpus [
+    shape=box,
+    class="implement",
+    label="GPT Critiques Opus Review",
+    goal_gate=true,
+    retry_target="CritiqueGPTOnOpus",
+    prompt="You are working in `run.working_dir`.
+
+Critique the Opus review for missing checks, weak evidence, or mistaken conclusions. Are there issues they missed? Did they flag false positives? Be specific with file:line references."
+  ];
+
+  CritiqueGPTOnGemini [
+    shape=box,
+    class="implement",
+    label="GPT Critiques Gemini Review",
+    goal_gate=true,
+    retry_target="CritiqueGPTOnGemini",
+    prompt="You are working in `run.working_dir`.
+
+Critique the Gemini review for missing checks, weak evidence, or mistaken conclusions. Are there issues they missed? Did they flag false positives? Be specific with file:line references."
+  ];
+
+  CritiqueGeminiOnOpus [
+    shape=box,
+    class="opinion",
+    label="Gemini Critiques Opus Review",
+    goal_gate=true,
+    retry_target="CritiqueGeminiOnOpus",
+    prompt="You are working in `run.working_dir`.
+
+Critique the Opus review for missing checks, weak evidence, or mistaken conclusions. Are there issues they missed? Did they flag false positives? Be specific with file:line references."
+  ];
+
+  CritiqueGeminiOnGPT [
+    shape=box,
+    class="opinion",
+    label="Gemini Critiques GPT Review",
+    goal_gate=true,
+    retry_target="CritiqueGeminiOnGPT",
+    prompt="You are working in `run.working_dir`.
+
+Critique the GPT-5.4 review for missing checks, weak evidence, or mistaken conclusions. Are there issues they missed? Did they flag false positives? Be specific with file:line references."
+  ];
+
+  CritiquesJoin [shape=tripleoctagon, label="Critiques Join"];
+
+  ReviewConsensus [
+    shape=box,
+    label="Review Consensus",
+    goal_gate=true,
+    retry_target="ImplementTask",
+    max_retries=1,
+    prompt="You are working in `run.working_dir`.
+
+## Task
+Synthesize all reviews and cross-critiques into a single final verdict.
+
+## Process
+1. Read all review outputs and critique outputs from context
+2. Identify issues confirmed by multiple reviewers (high confidence)
+3. Identify issues challenged by critiques (lower confidence — investigate)
+4. Categorize confirmed issues: Critical / Important / Suggestion
+5. For each Critical/Important issue, provide exact fix guidance
+
+## Verdict Rules
+- **SUCCESS:** No Critical issues. No more than 2 Important issues (and they're minor). Ship it.
+- **RETRY:** Critical issues found OR 3+ Important issues. Route back to implementation for fixes.
+- **FAIL:** Fundamental architectural problems that can't be fixed incrementally. Needs human.
+
+## Output
+State your verdict clearly:
+outcome=success — ready to ship
+outcome=retry — needs fixes (list them)
+outcome=fail — blocked, needs human intervention
+"
+  ];
+
+  FailureSummary [
+    shape=box,
+    label="Failure Summary",
+    goal_gate=true,
+    retry_target="FailureSummary",
+    prompt="You are working in `run.working_dir`.
+
+Summarize why the final review failed, what remains unresolved, and concrete next steps for recovery. Write to .ai/failure-summary.md."
+  ];
+
+  // ============================================================
+  // PHASE 6 — FINISH  (superpowers:finishing-a-development-branch)
+  // ============================================================
+
+  VerifyTestsFinal [
+    shape=parallelogram,
+    label="Final Test Verification",
+    command="set -eu\necho '=== Final verification before ship ==='\nif [ -f pyproject.toml ]; then\n  uv run pytest -v 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nelif [ -f package.json ]; then\n  npm test 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nelif [ -f go.mod ]; then\n  go test ./... 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nelif [ -f Cargo.toml ]; then\n  cargo test 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nfi\nprintf 'final-verification-pass'"
+  ];
+
+  FinishGate [
+    shape=hexagon,
+    type="wait.human",
+    label="How to Ship?"
+  ];
+
+  MergeLocal [
+    shape=box,
+    class="implement",
+    label="Merge Locally",
+    goal_gate=true,
+    retry_target="MergeLocal",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+Merge the current branch back to the base branch locally.
+
+## Process
+1. Determine base branch: git merge-base HEAD main 2>/dev/null || git merge-base HEAD master
+2. git checkout <base-branch>
+3. git pull (if remote exists)
+4. git merge <feature-branch>
+5. Run full test suite on merged result to verify no regressions
+6. git branch -d <feature-branch>
+7. Report: merged successfully, tests pass on merged result
+"
+  ];
+
+  CreatePR [
+    shape=box,
+    class="implement",
+    label="Create Pull Request",
+    goal_gate=true,
+    retry_target="CreatePR",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+Push the branch and create a pull request.
+
+## Process
+1. git push -u origin HEAD
+2. Generate PR title (under 70 chars) and body from:
+   - .ai/plan.md (what was planned)
+   - git log --oneline (what was implemented)
+   - Test results from context
+3. Create PR:
+   gh pr create --title '<title>' --body '<summary + test plan>'
+4. Report the PR URL
+"
+  ];
+
+  KeepBranch [
+    shape=box,
+    class="implement",
+    label="Keep Branch",
+    goal_gate=true,
+    retry_target="KeepBranch",
+    prompt="You are working in `run.working_dir`.
+
+Report the current branch name and worktree location. No cleanup needed — the user will handle it later."
+  ];
+
+  DiscardConfirm [
+    shape=hexagon,
+    type="wait.human",
+    label="Confirm Discard (type 'discard')"
+  ];
+
+  DiscardWork [
+    shape=box,
+    class="implement",
+    label="Discard Work",
+    goal_gate=true,
+    retry_target="DiscardWork",
+    prompt="You are working in `run.working_dir`.
+
+## WARNING: Destructive operation confirmed by user.
+
+1. Identify the base branch
+2. git checkout <base-branch>
+3. git branch -D <feature-branch>
+4. Report: work discarded, branch deleted
+"
+  ];
+
+  CleanupWorktree [
+    shape=parallelogram,
+    label="Cleanup Worktree",
+    command="set -eu\nWORKTREE_PATH=$(git worktree list | grep -v 'bare\\|main\\|master' | head -1 | awk '{print $1}')\nif [ -n \"$WORKTREE_PATH\" ] && [ \"$WORKTREE_PATH\" != \"$(pwd)\" ]; then\n  git worktree remove \"$WORKTREE_PATH\" 2>/dev/null || echo 'worktree-cleanup-skipped'\nfi\nprintf 'cleanup-done'"
+  ];
+
+  // ============================================================
+  // EDGES
+  // ============================================================
+
+  // Phase 1: Brainstorm
+  Start -> RefineBrief;
+  RefineBrief -> CheckClarification;
+  CheckClarification -> CommitBrief [label="ready", condition="outcome=success", weight=2];
+  CheckClarification -> HumanClarify [label="needs input", condition="outcome=clarify"];
+  HumanClarify -> IncorporateFeedback;
+  IncorporateFeedback -> CheckClarification;
+
+  // Phase 2: Plan
+  CommitBrief -> PlanFanOut;
+  PlanFanOut -> PlanOpus;
+  PlanFanOut -> PlanGPT;
+  PlanFanOut -> PlanGemini;
+  PlanOpus -> PlanJoin;
+  PlanGPT -> PlanJoin;
+  PlanGemini -> PlanJoin;
+  PlanJoin -> ConsolidatePlan;
+  ConsolidatePlan -> WriteLedger;
+  WriteLedger -> CommitPlan;
+
+  // Phase 3: Setup
+  CommitPlan -> SetupProject;
+  SetupProject -> VerifyBaseline;
+
+  // Phase 4: Implement Loop
+  VerifyBaseline -> PickNextTask;
+  PickNextTask -> CheckTasksRemaining;
+  CheckTasksRemaining -> ImplementTask [label="has task", condition="outcome=has_task", weight=2];
+  CheckTasksRemaining -> ValidateBuild [label="all done", condition="outcome=complete"];
+  ImplementTask -> SpecReview;
+  SpecReview -> QualityReview [condition="outcome=success", label="spec pass", weight=2];
+  SpecReview -> ImplementTask [condition="outcome=fail", label="spec fail"];
+  QualityReview -> MarkTaskComplete [condition="outcome=success", label="quality pass", weight=2];
+  QualityReview -> ImplementTask [condition="outcome=fail", label="quality fail"];
+  MarkTaskComplete -> PickNextTask;
+
+  // Phase 4: Escalation (graduated retry)
+  // Note: ImplementTask has max_retries=2 with retry_target=ImplementTask
+  // When those exhaust, goal_gate failure routes to graph-level retry_target
+  // DebugInvestigate is reached via ImplementTask's fallback after retries exhaust
+  ImplementTask -> DebugInvestigate [condition="outcome=fail", label="retries exhausted"];
+  DebugInvestigate -> PickNextTask [condition="outcome=success", label="fixed", weight=2];
+  DebugInvestigate -> ReplanTask [condition="outcome=fail", label="can't fix"];
+  ReplanTask -> PickNextTask [condition="outcome=success", label="replanned", weight=2];
+  ReplanTask -> HumanHelp [condition="outcome=fail", label="stuck"];
+  HumanHelp -> ResumeAfterHelp;
+  ResumeAfterHelp -> PickNextTask;
+
+  // Phase 5: Final Review
+  ValidateBuild -> ReviewFanOut [condition="outcome=success", label="build pass", weight=2];
+  ValidateBuild -> ImplementTask [condition="outcome=fail", label="build fail"];
+
+  ReviewFanOut -> FinalReviewOpus;
+  ReviewFanOut -> FinalReviewGPT;
+  ReviewFanOut -> FinalReviewGemini;
+  FinalReviewOpus -> ReviewsJoin;
+  FinalReviewGPT -> ReviewsJoin;
+  FinalReviewGemini -> ReviewsJoin;
+
+  ReviewsJoin -> CritiqueFanOut;
+
+  CritiqueFanOut -> CritiqueOpusOnGPT;
+  CritiqueFanOut -> CritiqueOpusOnGemini;
+  CritiqueFanOut -> CritiqueGPTOnOpus;
+  CritiqueFanOut -> CritiqueGPTOnGemini;
+  CritiqueFanOut -> CritiqueGeminiOnOpus;
+  CritiqueFanOut -> CritiqueGeminiOnGPT;
+  CritiqueOpusOnGPT -> CritiquesJoin;
+  CritiqueOpusOnGemini -> CritiquesJoin;
+  CritiqueGPTOnOpus -> CritiquesJoin;
+  CritiqueGPTOnGemini -> CritiquesJoin;
+  CritiqueGeminiOnOpus -> CritiquesJoin;
+  CritiqueGeminiOnGPT -> CritiquesJoin;
+
+  CritiquesJoin -> ReviewConsensus;
+
+  ReviewConsensus -> VerifyTestsFinal [condition="outcome=success", label="pass", weight=2];
+  ReviewConsensus -> ImplementTask [condition="outcome=retry", label="rework"];
+  ReviewConsensus -> FailureSummary [condition="outcome=fail", label="blocked"];
+  FailureSummary -> Exit;
+
+  // Phase 6: Finish
+  VerifyTestsFinal -> FinishGate [condition="outcome=success", label="tests pass", weight=2];
+  VerifyTestsFinal -> ImplementTask [condition="outcome=fail", label="tests fail"];
+
+  FinishGate -> MergeLocal [label="[M] Merge locally", condition="outcome=Merge"];
+  FinishGate -> CreatePR [label="[P] Push and create PR", condition="outcome=PR", weight=2];
+  FinishGate -> KeepBranch [label="[K] Keep branch as-is", condition="outcome=Keep"];
+  FinishGate -> DiscardConfirm [label="[D] Discard this work", condition="outcome=Discard"];
+
+  MergeLocal -> CleanupWorktree;
+  CreatePR -> CleanupWorktree;
+  KeepBranch -> Exit;
+  DiscardConfirm -> DiscardWork;
+  DiscardWork -> CleanupWorktree;
+  CleanupWorktree -> Exit;
+}
