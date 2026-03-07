@@ -41,6 +41,7 @@ digraph dotpowers {
     label="Explore Idea",
     goal_gate=true,
     retry_target="ExploreIdea",
+    fidelity="full",
     prompt="You are working in `run.working_dir`.
 
 ## Role
@@ -78,6 +79,7 @@ Write to docs/plans/brainstorm.md with sections:
     label="Refine Understanding",
     goal_gate=true,
     retry_target="RefineUnderstanding",
+    fidelity="full",
     prompt="You are working in `run.working_dir`.
 
 ## Role
@@ -171,6 +173,7 @@ Write to docs/plans/design-brief.md with clear section headings.
     label="Incorporate Design Feedback",
     goal_gate=true,
     retry_target="IncorporateDesignFeedback",
+    fidelity="full",
     prompt="You are working in `run.working_dir`.
 
 ## Task
@@ -712,6 +715,7 @@ outcome=fail if the problem is fundamental and needs human input
     label="Resume After Help",
     goal_gate=true,
     retry_target="ResumeAfterHelp",
+    fidelity="full",
     prompt="You are working in `run.working_dir`.
 
 The human provided guidance to unblock the current task. Incorporate their feedback:
