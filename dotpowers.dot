@@ -27,7 +27,7 @@ digraph dotpowers {
   CheckForSpec [
     shape=parallelogram,
     label="Check for Existing Spec",
-    tool_command="set -eu\nmkdir -p docs/plans\nfound=0\nfor f in README* readme* SPEC* spec* REQUIREMENTS* requirements* *.md docs/*.md docs/plans/design-brief.md; do\n  if [ -f \"$f\" ] 2>/dev/null; then\n    found=1\n    break\n  fi\ndone\nif [ \"$found\" -eq 1 ]; then\n  printf 'has_context'\n  exit 0\nfi\ncount=$(find . -maxdepth 2 -type f -not -path './.git/*' -not -path './docs/plans/*' | head -5 | wc -l | tr -d ' ')\nif [ \"$count\" -gt 0 ]; then\n  printf 'has_context'\nelse\n  printf 'empty_directory'\nfi"
+    tool_command="#!/bin/sh\nset -eu\nmkdir -p docs/plans\nfound=0\n# Look for a real spec: README/SPEC/REQUIREMENTS with >3 lines\nfor pattern in 'README*' 'readme*' 'SPEC*' 'spec*' 'REQUIREMENTS*' 'requirements*'; do\n  for f in $(ls -1 $pattern 2>/dev/null); do\n    if [ -f \"$f\" ]; then\n      lines=$(wc -l < \"$f\" | tr -d ' ')\n      if [ \"$lines\" -gt 3 ]; then\n        found=1\n        break 2\n      fi\n    fi\n  done\ndone\n# Check for substantial markdown docs (not our own artifacts)\nif [ \"$found\" -eq 0 ]; then\n  for f in $(ls -1 *.md docs/*.md 2>/dev/null); do\n    if [ -f \"$f\" ]; then\n      case \"$f\" in\n        docs/plans/brainstorm.md|docs/plans/design-brief.md) continue ;;\n      esac\n      lines=$(wc -l < \"$f\" | tr -d ' ')\n      if [ \"$lines\" -gt 3 ]; then\n        found=1\n        break\n      fi\n    fi\n  done\nfi\nif [ \"$found\" -eq 1 ]; then\n  printf 'has_context'\nelse\n  printf 'empty_directory'\nfi"
   ];
 
   WhatAreWeBuilding [
@@ -51,12 +51,13 @@ You are a senior software architect starting a brainstorm session.
 Read whatever exists in the working directory — could be a spec, README, existing code, or the human may have just described their idea. Your job is to understand what we're building.
 
 ## Process
-1. Read any human input from context (they may have described what to build)
-2. Read all files in the working directory for additional context
-3. Summarize what you understand so far about the project
-4. Identify the SINGLE most important open question — the one that would most change the design if answered differently
-5. Write your understanding and your question to docs/plans/brainstorm.md
-6. Format the question as multiple choice (2-4 options) with your recommended answer marked
+1. First, delete any stale brainstorm artifacts: rm -f docs/plans/brainstorm.md docs/plans/design-brief.md
+2. Read any human input from context (they may have described what to build)
+3. Read all files in the working directory for additional context
+4. Summarize what you understand so far about the project
+5. Identify the SINGLE most important open question — the one that would most change the design if answered differently
+6. Write your understanding and your question to docs/plans/brainstorm.md
+7. Format the question as multiple choice (2-4 options) with your recommended answer marked
 
 ## Output
 Write to docs/plans/brainstorm.md with sections:
