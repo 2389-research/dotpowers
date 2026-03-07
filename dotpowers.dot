@@ -1,11 +1,11 @@
 digraph dotpowers {
   graph [
     label="dotpowers — Superpowers as a Mammoth Pipeline",
-    goal="Given a project spec, autonomously brainstorm, plan, implement with TDD, review via multi-model consensus, and ship working software.",
+    goal="Given a project idea or spec, brainstorm the design with the human, plan, implement with TDD, review via multi-model consensus, and ship working software.",
     rankdir=LR,
     default_max_retry=2,
     retry_target="ImplementTask",
-    fallback_retry_target="RefineBrief",
+    fallback_retry_target="ExploreIdea",
     default_fidelity="summary:high",
     model_stylesheet="
       * { llm_model: claude-opus-4-6; llm_provider: anthropic; reasoning_effort: high; }
@@ -21,85 +21,165 @@ digraph dotpowers {
   Exit  [shape=Msquare,  label="Exit"];
 
   // ============================================================
-  // PHASE 1 — BRAINSTORM  (superpowers:brainstorming)
+  // PHASE 0 — EXPLORE IDEA  (superpowers:brainstorming — understand the idea)
   // ============================================================
 
-  RefineBrief [
+  ExploreIdea [
     shape=box,
-    label="Refine Brief",
+    label="Explore Idea",
     goal_gate=true,
-    retry_target="RefineBrief",
+    retry_target="ExploreIdea",
     prompt="You are working in `run.working_dir`.
 
 ## Role
-You are a senior software architect conducting a design brainstorm.
+You are a senior software architect starting a brainstorm session.
 
 ## Task
-Refine the project spec into a structured design brief. The input spec may be terse or ambiguous — your job is to fill gaps, identify risks, and produce a clear blueprint.
+Read whatever exists in the working directory — could be a one-line idea, a README, a detailed spec, or nothing but a project name. Your job is to understand what we're building.
 
 ## Process
-1. Read any existing spec, README, or requirements in the working directory
-2. Identify: purpose, constraints, non-goals, success criteria
-3. Propose 2-3 architectural approaches with trade-offs
-4. Select the recommended approach with justification
-5. YAGNI ruthlessly — cut anything not strictly needed for v1
-6. Produce a structured design brief covering:
+1. Read all files in the working directory for context
+2. Summarize what you understand so far about the project
+3. Identify the SINGLE most important open question — the one that would most change the design if answered differently
+4. Write your understanding and your question to .ai/brainstorm.md
+5. Format the question as multiple choice (2-4 options) with your recommended answer marked
+
+## Output
+Write to .ai/brainstorm.md with sections:
+- **Understanding:** What I think we're building
+- **Key Question:** The most important thing to clarify next (multiple choice)
+- **Recommendation:** Which option I'd pick and why
+"
+  ];
+
+  HumanBrainstorm [
+    shape=hexagon,
+    type="wait.human",
+    label="Brainstorm with Human"
+  ];
+
+  RefineUnderstanding [
+    shape=box,
+    label="Refine Understanding",
+    goal_gate=true,
+    retry_target="RefineUnderstanding",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are continuing a brainstorm session with the human.
+
+## Task
+Incorporate the human's answer and dig deeper.
+
+## Process
+1. Read .ai/brainstorm.md for the current state of the brainstorm
+2. Read the human's response from context
+3. Update your understanding based on their answer
+4. Identify the NEXT most important open question (one at a time!)
+5. Consider these dimensions (work through them across iterations):
+   - Purpose and goals
+   - Constraints and non-goals
+   - Success criteria
+   - Architecture approaches (propose 2-3 with trade-offs when ready)
+   - Tech stack
+   - Error handling strategy
+   - Testing strategy
+   - Component breakdown
+6. Format as multiple choice with your recommendation
+7. When you believe you have enough to write a design brief, instead of a question write: READY_FOR_DESIGN
+
+## Output
+Append to .ai/brainstorm.md with:
+- **Human said:** [their answer]
+- **Updated understanding:** [what changed]
+- **Next question:** [multiple choice] OR **READY_FOR_DESIGN**
+"
+  ];
+
+  CheckBrainstormDone [
+    shape=diamond,
+    label="Brainstorm Complete?",
+    prompt="You are working in `run.working_dir`.
+
+Read .ai/brainstorm.md and check the last section.
+
+If it contains READY_FOR_DESIGN: outcome=done
+Otherwise: outcome=more_questions
+"
+  ];
+
+  // ============================================================
+  // PHASE 1 — DESIGN BRIEF  (superpowers:brainstorming — produce the design)
+  // ============================================================
+
+  WriteDesignBrief [
+    shape=box,
+    label="Write Design Brief",
+    goal_gate=true,
+    retry_target="WriteDesignBrief",
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are a senior software architect producing a design brief from a completed brainstorm.
+
+## Task
+Synthesize the brainstorm conversation into a structured design brief.
+
+## Process
+1. Read .ai/brainstorm.md for the full brainstorm history
+2. Produce a structured design brief covering:
    - Architecture (components, data flow, key decisions)
    - Tech stack with rationale
    - Error handling strategy
    - Testing strategy (determine appropriate test framework for the language)
    - Component breakdown with dependencies marked
    - Which components can be built in parallel vs must be sequential
+3. YAGNI ruthlessly — cut anything not strictly needed for v1
+4. Present 2-3 architectural approaches with trade-offs if not already resolved
+5. Select the recommended approach with justification
 
 ## Output
 Write the design brief to .ai/design-brief.md
-
-## Ambiguity Check
-At the end, honestly assess: are there critical ambiguities that could lead to building the wrong thing? If YES, end your response with exactly: NEEDS_CLARIFICATION. If the spec is clear enough to proceed, end with exactly: READY_TO_PLAN.
-
-## Success Criteria
-- .ai/design-brief.md exists with all sections filled
-- Final line is either NEEDS_CLARIFICATION or READY_TO_PLAN
 "
   ];
 
-  CheckClarification [
+  ReviewDesign [
+    shape=hexagon,
+    type="wait.human",
+    label="Review Design"
+  ];
+
+  IncorporateDesignFeedback [
+    shape=box,
+    label="Incorporate Design Feedback",
+    goal_gate=true,
+    retry_target="IncorporateDesignFeedback",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+The human reviewed the design brief and provided feedback.
+
+## Process
+1. Read .ai/design-brief.md
+2. Read the human's feedback from context
+3. If they approved: end with APPROVED
+4. If they requested changes: update the brief, end with REVISED
+
+## Output
+Overwrite .ai/design-brief.md with the updated brief.
+End with APPROVED or REVISED on the last line.
+"
+  ];
+
+  CheckDesignApproved [
     shape=diamond,
-    label="Needs Clarification?",
+    label="Design Approved?",
     prompt="You are working in `run.working_dir`.
 
 Read .ai/design-brief.md and check the last line.
 
-If it ends with NEEDS_CLARIFICATION: outcome=clarify
-If it ends with READY_TO_PLAN: outcome=success
-"
-  ];
-
-  HumanClarify [
-    shape=hexagon,
-    type="wait.human",
-    label="Clarify Ambiguities"
-  ];
-
-  IncorporateFeedback [
-    shape=box,
-    label="Incorporate Feedback",
-    goal_gate=true,
-    retry_target="IncorporateFeedback",
-    prompt="You are working in `run.working_dir`.
-
-## Task
-The human provided clarifying answers to ambiguities in the design brief. Incorporate their feedback.
-
-## Process
-1. Read .ai/design-brief.md
-2. Read the human's clarifying input from the previous context
-3. Update the design brief with resolved ambiguities
-4. Re-assess: are there still critical ambiguities?
-5. End with NEEDS_CLARIFICATION or READY_TO_PLAN
-
-## Output
-Overwrite .ai/design-brief.md with the updated brief.
+If it ends with APPROVED: outcome=approved
+If it ends with REVISED: outcome=revised (needs another review)
 "
   ];
 
@@ -111,8 +191,8 @@ Overwrite .ai/design-brief.md with the updated brief.
     retry_target="CommitBrief",
     prompt="You are working in `run.working_dir`.
 
-Stage and commit the design brief:
-git add .ai/design-brief.md
+Stage and commit the design brief and brainstorm history:
+git add .ai/design-brief.md .ai/brainstorm.md
 git commit -m 'docs(design): add project design brief'
 
 Verify: git log --oneline -1
@@ -947,13 +1027,20 @@ Report the current branch name and worktree location. No cleanup needed — the 
   // EDGES
   // ============================================================
 
-  // Phase 1: Brainstorm
-  Start -> RefineBrief;
-  RefineBrief -> CheckClarification;
-  CheckClarification -> CommitBrief [label="ready", condition="outcome=success", weight=2];
-  CheckClarification -> HumanClarify [label="needs input", condition="outcome=clarify"];
-  HumanClarify -> IncorporateFeedback;
-  IncorporateFeedback -> CheckClarification;
+  // Phase 0: Brainstorm (Socratic loop with human)
+  Start -> ExploreIdea;
+  ExploreIdea -> HumanBrainstorm;
+  HumanBrainstorm -> RefineUnderstanding;
+  RefineUnderstanding -> CheckBrainstormDone;
+  CheckBrainstormDone -> HumanBrainstorm [label="more questions", condition="outcome=more_questions"];
+  CheckBrainstormDone -> WriteDesignBrief [label="ready for design", condition="outcome=done", weight=2];
+
+  // Phase 1: Design Brief (write, review with human, iterate)
+  WriteDesignBrief -> ReviewDesign;
+  ReviewDesign -> IncorporateDesignFeedback;
+  IncorporateDesignFeedback -> CheckDesignApproved;
+  CheckDesignApproved -> CommitBrief [label="approved", condition="outcome=approved", weight=2];
+  CheckDesignApproved -> ReviewDesign [label="revised, re-review", condition="outcome=revised"];
 
   // Phase 2: Plan
   CommitBrief -> PlanFanOut;
