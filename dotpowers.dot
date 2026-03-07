@@ -27,19 +27,7 @@ digraph dotpowers {
   CheckForSpec [
     shape=parallelogram,
     label="Check for Existing Spec",
-    tool_command="set -eu\nmkdir -p .ai\nfound=0\nfor f in README* readme* SPEC* spec* REQUIREMENTS* requirements* *.md docs/*.md .ai/design-brief.md; do\n  if [ -f \"$f\" ] 2>/dev/null; then\n    found=1\n    break\n  fi\ndone\nif [ \"$found\" -eq 1 ]; then\n  printf 'has_spec'\nelse\n  count=$(find . -maxdepth 2 -type f -not -path './.git/*' -not -path './.ai/*' | head -5 | wc -l | tr -d ' ')\n  if [ \"$count\" -gt 0 ]; then\n    printf 'has_files'\n  else\n    printf 'empty_directory'\n  fi\nfi"
-  ];
-
-  CheckHasContext [
-    shape=diamond,
-    label="Has Existing Context?",
-    prompt="You are working in `run.working_dir`.
-
-Check the output from the previous tool node.
-
-If the output is 'has_spec' or 'has_files': outcome=has_context (skip to ExploreIdea)
-If the output is 'empty_directory': outcome=empty (ask the human what to build)
-"
+    tool_command="set -eu\nmkdir -p .ai\nfound=0\nfor f in README* readme* SPEC* spec* REQUIREMENTS* requirements* *.md docs/*.md .ai/design-brief.md; do\n  if [ -f \"$f\" ] 2>/dev/null; then\n    found=1\n    break\n  fi\ndone\nif [ \"$found\" -eq 1 ]; then\n  printf 'has_context'\n  exit 0\nfi\ncount=$(find . -maxdepth 2 -type f -not -path './.git/*' -not -path './.ai/*' | head -5 | wc -l | tr -d ' ')\nif [ \"$count\" -gt 0 ]; then\n  printf 'has_context'\nelse\n  printf 'empty_directory'\nfi"
   ];
 
   WhatAreWeBuilding [
@@ -59,10 +47,10 @@ If the output is 'empty_directory': outcome=empty (ask the human what to build)
 You are a senior software architect starting a brainstorm session.
 
 ## Task
-The human just told you what they want to build. Combine their input with whatever already exists in the working directory (README, spec, config files, existing code — or nothing at all).
+Read whatever exists in the working directory — could be a spec, README, existing code, or the human may have just described their idea. Your job is to understand what we're building.
 
 ## Process
-1. Read the human's idea/description from context
+1. Read any human input from context (they may have described what to build)
 2. Read all files in the working directory for additional context
 3. Summarize what you understand so far about the project
 4. Identify the SINGLE most important open question — the one that would most change the design if answered differently
@@ -1058,9 +1046,8 @@ Report the current branch name and worktree location. No cleanup needed — the 
 
   // Phase 0: Brainstorm (check for existing context, ask human only if empty)
   Start -> CheckForSpec;
-  CheckForSpec -> CheckHasContext;
-  CheckHasContext -> ExploreIdea [label="has context", condition="outcome=has_context", weight=2];
-  CheckHasContext -> WhatAreWeBuilding [label="empty dir", condition="outcome=empty"];
+  CheckForSpec -> ExploreIdea [label="has context", condition="context.tool_stdout=has_context", weight=2];
+  CheckForSpec -> WhatAreWeBuilding [label="empty dir", condition="context.tool_stdout=empty_directory"];
   WhatAreWeBuilding -> ExploreIdea;
   ExploreIdea -> HumanBrainstorm;
   HumanBrainstorm -> RefineUnderstanding;
