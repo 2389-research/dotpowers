@@ -424,7 +424,7 @@ Initialize the project based on the plan's tech stack section.
   PickNextTask [
     shape=parallelogram,
     label="Pick Next Task",
-    tool_command="#!/bin/sh\nset -eu\ntarget=$(grep -oE 'task-[0-9]+' docs/plans/plan.md | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" docs/plans/plan.md; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
+    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\ntotal=$(grep -c '^- \\[.\\] task-[0-9]' \"$PLAN\" 2>/dev/null || true)\nif [ \"$total\" -eq 0 ]; then\n  printf 'no_tasks_found'\n  exit 0\nfi\ntarget=$(grep -oE 'task-[0-9]+' \"$PLAN\" | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" \"$PLAN\"; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
   ];
 
   // CheckTasksRemaining removed — routing directly from PickNextTask via tool_stdout
@@ -1034,8 +1034,9 @@ Report the current branch name and worktree location. No cleanup needed — the 
 
   // Phase 4: Implement Loop
   VerifyBaseline -> PickNextTask;
-  PickNextTask -> ImplementTask [label="has task", condition="context.tool_stdout!=all_complete", weight=2];
+  PickNextTask -> ImplementTask [label="has task", condition="context.tool_stdout!=all_complete,context.tool_stdout!=no_tasks_found", weight=2];
   PickNextTask -> ValidateBuild [label="all done", condition="context.tool_stdout=all_complete"];
+  PickNextTask -> HumanHelp [label="no tasks in plan", condition="context.tool_stdout=no_tasks_found"];
   ImplementTask -> SpecReview;
   SpecReview -> QualityReview [condition="outcome=success", label="spec pass", weight=2];
   SpecReview -> ImplementTask [condition="outcome=fail", label="spec fail"];
