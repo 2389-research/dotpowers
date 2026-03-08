@@ -66,7 +66,8 @@ Write to docs/plans/brainstorm.md with sections:
   HumanBrainstorm [
     shape=hexagon,
     mode="freeform",
-    label="Brainstorm with Human"
+    label="Brainstorm with Human",
+    prompt="Answer the question above from the brainstorm agent. Your response will be incorporated into the design exploration."
   ];
 
   RefineUnderstanding [
@@ -154,7 +155,8 @@ Write to docs/plans/design-brief.md with clear section headings.
   ReviewDesign [
     shape=hexagon,
     mode="freeform",
-    label="Review Design Brief"
+    label="Review Design Brief",
+    prompt="The design brief above was written based on your brainstorm. Review it and respond with one of:\n- 'approved' or 'looks good' if you're happy with it\n- Specific feedback on what to change (e.g. 'use SQLite instead of Postgres', 'drop the auth feature for v1')"
   ];
 
   IncorporateDesignFeedback [
@@ -666,7 +668,8 @@ outcome=fail if the problem is fundamental and needs human input
   HumanHelp [
     shape=hexagon,
     mode="freeform",
-    label="Need Human Help"
+    label="Need Human Help",
+    prompt="The pipeline is stuck and needs your input. See the context above for what went wrong. Provide guidance to unblock it."
   ];
 
   ResumeAfterHelp [
