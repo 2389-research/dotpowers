@@ -269,7 +269,7 @@ Write your plan to docs/plans/plan.md
   ValidatePlanFormat [
     shape=parallelogram,
     label="Validate Plan Format",
-    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\nif [ ! -s \"$PLAN\" ]; then\n  printf 'fail_no_plan'\n  exit 0\nfi\ncount=$(grep -c '^- \\[ \\] task-[0-9]\\+:' \"$PLAN\" || true)\nif [ \"$count\" -eq 0 ]; then\n  printf 'fail_no_checkboxes'\n  exit 0\nfi\nhandwaves=$(grep -ciE '(write a complete implementation|add appropriate|add validation logic|add error handling logic|add the logic)' \"$PLAN\" || true)\nif [ \"$handwaves\" -gt 0 ]; then\n  printf 'fail_handwaves'\n  exit 0\nfi\nprintf 'format_ok'"
+    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\nmkdir -p .tracker\nCOUNTER='.tracker/plan_validate_count'\nvc=0\n[ -f \"$COUNTER\" ] && vc=$(cat \"$COUNTER\")\nvc=$((vc + 1))\nprintf '%s' \"$vc\" > \"$COUNTER\"\nif [ \"$vc\" -gt 5 ]; then\n  printf 'fail_retries_exhausted'\n  exit 0\nfi\nif [ ! -s \"$PLAN\" ]; then\n  printf 'fail_no_plan'\n  exit 0\nfi\ncount=$(grep -c '^- \\[ \\] task-[0-9]\\+:' \"$PLAN\" || true)\nif [ \"$count\" -eq 0 ]; then\n  printf 'fail_no_checkboxes'\n  exit 0\nfi\nhandwaves=$(grep -ciE '(write a complete implementation|add appropriate|add validation logic|add error handling logic|add the logic)' \"$PLAN\" || true)\nif [ \"$handwaves\" -gt 0 ]; then\n  printf 'fail_handwaves'\n  exit 0\nfi\nprintf 'format_ok'"
   ];
 
   AuditPlanSpec [
@@ -581,6 +581,12 @@ If Critical or Important issues found: FAIL with file:line references and fix gu
 outcome=success if PASS
 outcome=fail if FAIL
 "
+  ];
+
+  CheckImplementBudget [
+    shape=parallelogram,
+    label="Check Implement Budget",
+    tool_command="#!/bin/sh\nset -eu\nmkdir -p .tracker\nTASK=$(cat docs/plans/current_task_id.txt)\nCOUNTER=\".tracker/impl_count_${TASK}\"\ncount=0\n[ -f \"$COUNTER\" ] && count=$(cat \"$COUNTER\")\ncount=$((count + 1))\nprintf '%s' \"$count\" > \"$COUNTER\"\nif [ \"$count\" -gt 5 ]; then\n  printf 'budget_exhausted'\nelse\n  printf 'budget_ok'\nfi"
   ];
 
   MarkTaskComplete [
@@ -918,6 +924,12 @@ outcome=fail — blocked, needs human intervention
 "
   ];
 
+  CheckReworkBudget [
+    shape=parallelogram,
+    label="Check Rework Budget",
+    tool_command="#!/bin/sh\nset -eu\nmkdir -p .tracker\nCOUNTER='.tracker/rework_count'\ncount=0\n[ -f \"$COUNTER\" ] && count=$(cat \"$COUNTER\")\ncount=$((count + 1))\nprintf '%s' \"$count\" > \"$COUNTER\"\nif [ \"$count\" -gt 2 ]; then\n  printf 'budget_exhausted'\nelse\n  printf 'budget_ok'\nfi"
+  ];
+
   FailureSummary [
     shape=box,
     label="Failure Summary",
@@ -1051,7 +1063,8 @@ Report the current branch name and worktree location. No cleanup needed — the 
   CommitBrief -> DraftPlan;
   DraftPlan -> ValidatePlanFormat;
   ValidatePlanFormat -> AuditPlanSpec [label="format ok", condition="context.tool_stdout=format_ok", weight=2];
-  ValidatePlanFormat -> DraftPlan [label="format fail", condition="context.tool_stdout!=format_ok"];
+  ValidatePlanFormat -> HumanHelp [label="plan loop exhausted", condition="context.tool_stdout=fail_retries_exhausted"];
+  ValidatePlanFormat -> DraftPlan [label="format fail", condition="context.tool_stdout!=format_ok,context.tool_stdout!=fail_retries_exhausted"];
   AuditPlanSpec -> CommitPlan [label="plan approved", condition="outcome=success", weight=2];
   AuditPlanSpec -> PatchPlan [label="gaps found", condition="outcome=fail"];
   PatchPlan -> ValidatePlanFormat;
@@ -1067,9 +1080,11 @@ Report the current branch name and worktree location. No cleanup needed — the 
   PickNextTask -> HumanHelp [label="no tasks in plan", condition="context.tool_stdout=no_tasks_found"];
   ImplementTask -> SpecReview;
   SpecReview -> QualityReview [condition="outcome=success", label="spec pass", weight=2];
-  SpecReview -> ImplementTask [condition="outcome=fail", label="spec fail"];
+  SpecReview -> CheckImplementBudget [condition="outcome=fail", label="spec fail"];
   QualityReview -> MarkTaskComplete [condition="outcome=success", label="quality pass", weight=2];
-  QualityReview -> ImplementTask [condition="outcome=fail", label="quality fail"];
+  QualityReview -> CheckImplementBudget [condition="outcome=fail", label="quality fail"];
+  CheckImplementBudget -> ImplementTask [label="retry ok", condition="context.tool_stdout=budget_ok", weight=2];
+  CheckImplementBudget -> HumanHelp [label="too many attempts", condition="context.tool_stdout=budget_exhausted"];
   MarkTaskComplete -> PickNextTask;
 
   // Phase 4: Escalation (graduated retry)
@@ -1077,7 +1092,7 @@ Report the current branch name and worktree location. No cleanup needed — the 
   // When those exhaust, goal_gate failure routes to graph-level retry_target
   // DebugInvestigate is reached via ImplementTask's fallback after retries exhaust
   ImplementTask -> DebugInvestigate [condition="outcome=fail", label="retries exhausted"];
-  DebugInvestigate -> PickNextTask [condition="outcome=success", label="fixed", weight=2];
+  DebugInvestigate -> ImplementTask [condition="outcome=success", label="fixed, re-verify", weight=2];
   DebugInvestigate -> ReplanTask [condition="outcome=fail", label="can't fix"];
   ReplanTask -> PickNextTask [condition="outcome=success", label="replanned", weight=2];
   ReplanTask -> HumanHelp [condition="outcome=fail", label="stuck"];
@@ -1086,7 +1101,7 @@ Report the current branch name and worktree location. No cleanup needed — the 
 
   // Phase 5: Final Review
   ValidateBuild -> ReviewFanOut [condition="outcome=success", label="build pass", weight=2];
-  ValidateBuild -> ImplementTask [condition="outcome=fail", label="build fail"];
+  ValidateBuild -> CheckReworkBudget [condition="outcome=fail", label="build fail"];
 
   ReviewFanOut -> FinalReviewOpus;
   ReviewFanOut -> FinalReviewGPT;
@@ -1113,13 +1128,15 @@ Report the current branch name and worktree location. No cleanup needed — the 
   CritiquesJoin -> ReviewConsensus;
 
   ReviewConsensus -> VerifyTestsFinal [condition="outcome=success", label="pass", weight=2];
-  ReviewConsensus -> ImplementTask [condition="outcome=retry", label="rework"];
+  ReviewConsensus -> CheckReworkBudget [condition="outcome=retry", label="rework"];
   ReviewConsensus -> FailureSummary [condition="outcome=fail", label="blocked"];
+  CheckReworkBudget -> ImplementTask [label="rework ok", condition="context.tool_stdout=budget_ok", weight=2];
+  CheckReworkBudget -> FailureSummary [label="rework budget exhausted", condition="context.tool_stdout=budget_exhausted"];
   FailureSummary -> Exit;
 
   // Phase 6: Finish
   VerifyTestsFinal -> FinishGate [condition="outcome=success", label="tests pass", weight=2];
-  VerifyTestsFinal -> ImplementTask [condition="outcome=fail", label="tests fail"];
+  VerifyTestsFinal -> CheckReworkBudget [condition="outcome=fail", label="tests fail"];
 
   FinishGate -> MergeLocal [label="[M] Merge locally", condition="outcome=Merge"];
   FinishGate -> CreatePR [label="[P] Push and create PR", condition="outcome=PR", weight=2];
