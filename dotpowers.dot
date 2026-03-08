@@ -400,8 +400,9 @@ Initialize the project based on the plan's tech stack section.
    - (adapt as needed)
 4. Configure pre-commit hooks if the ecosystem supports it
 5. Create initial directory structure per the plan
-6. Run the test command to verify it works (even with 0 tests)
-7. Commit: git add -A && git commit -m 'chore(setup): initialize project with deps and tooling'
+6. Ensure .gitignore exists and includes at minimum: .env, .tracker/, *.bak, __pycache__/, .mypy_cache/, .ruff_cache/, node_modules/, target/
+7. Run the test command to verify it works (even with 0 tests)
+8. Commit: git add -A && git commit -m 'chore(setup): initialize project with deps and tooling'
 
 ## Success Criteria
 - Project initializes cleanly
@@ -474,7 +475,9 @@ Write code before the test? Delete it. Start over. No exceptions.
 
 ### COMMIT
 Run the project's linter and formatter. Fix all issues.
-git add -A && git commit -m '<type>(<scope>): <description>'
+Stage only the files you created or modified — use git add with specific file paths, NOT git add -A.
+Never stage .env, .tracker/, or other infrastructure files.
+git commit -m '<type>(<scope>): <description>'
 
 ## Self-Review Checklist
 Before finishing, honestly assess:
