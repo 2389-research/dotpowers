@@ -10,6 +10,7 @@ digraph dotpowers {
     model_stylesheet="
       * { llm_model: claude-opus-4-6; llm_provider: anthropic; reasoning_effort: high; }
       .implement { llm_model: gpt-5.4; llm_provider: openai; reasoning_effort: high; }
+      .draft { llm_model: gpt-5.2; llm_provider: openai; reasoning_effort: high; }
       .opinion { llm_model: gemini-3.5-flash; llm_provider: gemini; reasoning_effort: high; }
     "
   ];
