@@ -204,176 +204,152 @@ Verify: git log --oneline -1
   ];
 
   // ============================================================
-  // PHASE 2 — PLAN  (superpowers:writing-plans)
-  //   Multi-model consensus planning
+  // PHASE 2 — PLAN  (draft-audit-patch loop)
   // ============================================================
 
-  PlanFanOut [shape=component, label="Plan (Parallel)"];
-
-  PlanOpus [
+  DraftPlan [
     shape=box,
-    label="Plan (Opus)",
+    class="draft",
+    label="Draft Plan (GPT-5.2)",
     goal_gate=true,
-    retry_target="PlanOpus",
+    retry_target="DraftPlan",
+    fidelity="full",
     prompt="You are working in `run.working_dir`.
 
 ## Role
-You are a senior architect creating an implementation plan.
+You are a senior architect creating a detailed implementation plan using strict TDD.
 
 ## Context
 Read docs/plans/design-brief.md for the project design.
 
 ## Task
-Create a detailed, step-by-step implementation plan. Write plans assuming the engineer has ZERO context and questionable taste. Document everything.
+Create a step-by-step implementation plan. Write it assuming the implementing engineer has ZERO context and questionable taste. Document everything they need.
 
-## Plan Structure
-For each task (one action, 2-5 minutes each):
-- **Files:** exact paths to create/modify/test
-- **Step 1:** Write the failing test (complete code, not pseudocode)
-- **Step 2:** Run test to verify it fails (exact command + expected output)
-- **Step 3:** Write minimal implementation (complete code)
-- **Step 4:** Run test to verify it passes (exact command + expected output)
-- **Step 5:** Commit (exact git command + message in conventional commit format)
+## Plan Header (MANDATORY)
+Start the plan with:
+- Goal (one sentence)
+- Architecture (2-3 sentences)
+- Tech stack (language, framework, key deps, test framework, linter)
 
-## Requirements
-- Each step is ONE action — 'write test' and 'run test' are separate steps
-- Exact file paths always
-- Complete code in plan, never 'add validation' or 'implement logic'
-- Exact commands with expected output
-- Tag each task as PARALLEL or SEQUENTIAL based on dependencies
-- Identify the test framework appropriate for the project's language
-- Include setup tasks (project init, deps, tooling) before implementation tasks
+## Task Format (MANDATORY — follow EXACTLY)
+Every task MUST be a markdown checkbox with a task ID:
+
+- [ ] task-001: Short descriptive title
+  **Files:** exact paths to create/modify/test
+  **Step 1: Write the failing test**
+  (complete test code — not pseudocode, not 'add appropriate tests')
+  **Step 2: Run test to verify it fails**
+  (exact command + expected failure output)
+  **Step 3: Write minimal implementation**
+  (complete implementation code — not 'implement the logic' or 'add validation')
+  **Step 4: Run test to verify it passes**
+  (exact command + expected output)
+  **Step 5: Commit**
+  (exact git command with conventional commit message)
+
+- [ ] task-002: Next task title
+  ...
+
+## IRON RULES
+- NEVER write 'implement the logic', 'add appropriate', 'write a complete implementation', 'add validation', or 'TODO'. Every function body must be written out in full.
+- NEVER write tautological tests. A test that asserts `width() == 16` is WRONG if width should be computed from content. Test the BEHAVIOR, not hardcoded values.
+- Every requirement in the design brief MUST have a corresponding task AND test. If the design brief says 'render X in the bottom-right', there must be a test that asserts X is rendered.
+- Each step is ONE action (2-5 minutes). 'Write test' and 'run test' are separate steps.
+- Tag each task as PARALLEL or SEQUENTIAL based on dependencies.
+- Include setup tasks (project init, deps, tooling) before implementation tasks.
 
 ## Output
-Write your plan to docs/plans/plan-opus.md
+Write your plan to docs/plans/plan.md
 "
   ];
 
-  PlanGPT [
+  ValidatePlanFormat [
+    shape=parallelogram,
+    label="Validate Plan Format",
+    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\nif [ ! -s \"$PLAN\" ]; then\n  printf 'fail_no_plan'\n  exit 0\nfi\ncount=$(grep -c '^- \\[ \\] task-[0-9]\\+:' \"$PLAN\" || true)\nif [ \"$count\" -eq 0 ]; then\n  printf 'fail_no_checkboxes'\n  exit 0\nfi\nhandwaves=$(grep -ciE '(write a complete|add appropriate|implement the|add validation|add logic|TODO|TBD)' \"$PLAN\" || true)\nif [ \"$handwaves\" -gt 0 ]; then\n  printf 'fail_handwaves'\n  exit 0\nfi\nprintf 'format_ok'"
+  ];
+
+  AuditPlanSpec [
     shape=box,
-    class="implement",
-    label="Plan (GPT-5.4)",
+    label="Audit Plan vs Spec (Opus)",
     goal_gate=true,
-    retry_target="PlanGPT",
+    retry_target="PatchPlan",
     prompt="You are working in `run.working_dir`.
 
 ## Role
-You are a senior architect creating an implementation plan.
-
-## Context
-Read docs/plans/design-brief.md for the project design.
+You are a meticulous spec compliance auditor for implementation plans.
 
 ## Task
-Create a detailed, step-by-step implementation plan. Write plans assuming the engineer has ZERO context and questionable taste. Document everything.
-
-## Plan Structure
-For each task (one action, 2-5 minutes each):
-- **Files:** exact paths to create/modify/test
-- **Step 1:** Write the failing test (complete code, not pseudocode)
-- **Step 2:** Run test to verify it fails (exact command + expected output)
-- **Step 3:** Write minimal implementation (complete code)
-- **Step 4:** Run test to verify it passes (exact command + expected output)
-- **Step 5:** Commit (exact git command + message in conventional commit format)
-
-## Requirements
-- Each step is ONE action
-- Exact file paths always
-- Complete code in plan
-- Exact commands with expected output
-- Tag each task as PARALLEL or SEQUENTIAL
-- Identify appropriate test framework for the language
-- Focus on pragmatic, minimal implementations
-
-## Output
-Write your plan to docs/plans/plan-gpt.md
-"
-  ];
-
-  PlanGemini [
-    shape=box,
-    class="opinion",
-    label="Plan (Gemini)",
-    goal_gate=true,
-    retry_target="PlanGemini",
-    prompt="You are working in `run.working_dir`.
-
-## Role
-You are a senior architect creating an implementation plan.
-
-## Context
-Read docs/plans/design-brief.md for the project design.
-
-## Task
-Create a detailed, step-by-step implementation plan. Write plans assuming the engineer has ZERO context and questionable taste. Document everything.
-
-## Plan Structure
-For each task (one action, 2-5 minutes each):
-- **Files:** exact paths to create/modify/test
-- **Step 1:** Write the failing test (complete code)
-- **Step 2:** Run test to verify it fails (exact command + expected output)
-- **Step 3:** Write minimal implementation (complete code)
-- **Step 4:** Run test to verify it passes (exact command + expected output)
-- **Step 5:** Commit (exact git command + message)
-
-## Requirements
-- Each step is ONE action
-- Exact file paths always
-- Complete code in plan
-- Exact commands with expected output
-- Tag each task as PARALLEL or SEQUENTIAL
-- Focus on risk identification and edge cases
-
-## Output
-Write your plan to docs/plans/plan-gemini.md
-"
-  ];
-
-  PlanJoin [shape=tripleoctagon, label="Plans Join"];
-
-  ConsolidatePlan [
-    shape=box,
-    label="Consolidate Plan",
-    goal_gate=true,
-    retry_target="ConsolidatePlan",
-    prompt="You are working in `run.working_dir`.
-
-## Task
-Three independent implementation plans exist. Synthesize them into one final plan.
+Verify that every requirement in the design brief has a corresponding task AND test in the plan.
 
 ## Process
-1. Read docs/plans/plan-opus.md, docs/plans/plan-gpt.md, docs/plans/plan-gemini.md
-2. For each task area, select the strongest approach across all three plans
-3. Resolve conflicts — prefer the approach with better test coverage
-4. Preserve PARALLEL/SEQUENTIAL tags (task is PARALLEL only if ALL three plans agree it's independent)
-5. Assign each task a sequential ID: task-001, task-002, etc.
-6. Ensure every task has complete code, exact commands, and exact file paths
-7. Add a mandatory plan header:
-   - Goal (one sentence)
-   - Architecture (2-3 sentences)
-   - Tech stack (language, framework, key deps, test framework, linter)
+1. Read docs/plans/design-brief.md — extract every concrete requirement:
+   - Features and behaviors (e.g. 'render corner counter in bottom-right')
+   - Data types and constraints (e.g. 'State.x as i16')
+   - Error handling requirements
+   - UI/rendering specifications
+   - API contracts
 
-## Task Format
-Each task MUST be a markdown checkbox line at the top level:
-- [ ] task-001: Short title
+2. Read docs/plans/plan.md — for each requirement, verify:
+   a. There is a task that implements it (with complete code, not hand-waves)
+   b. There is a test that would FAIL if the requirement were missing
+   c. The test is NOT tautological (does not assert hardcoded values that could drift from reality)
 
-Followed by the detailed steps indented below it. Example:
-
-- [ ] task-001: Set up CLI entry point
-  1. Write failing test...
-  2. Implement...
-
-- [ ] task-002: Add URL fetching
-  1. Write failing test...
+3. Flag each gap with structured output:
+   - MISSING_TASK: requirement has no corresponding task
+   - MISSING_TEST: requirement has a task but no test
+   - TAUTOLOGICAL_TEST: test asserts a hardcoded value instead of computing from content
+   - VAGUE_IMPLEMENTATION: task says 'implement X' without complete code
 
 ## Output
-Write the consolidated plan to docs/plans/plan.md
+Write results to docs/plans/plan-audit.txt:
+- If all requirements covered: write the single word APPROVED
+- If gaps found: write structured gap list, one GAP block per issue:
 
-## Success Criteria
-- Single coherent plan with no contradictions
-- Every task is a top-level markdown checkbox (- [ ] task-NNN: title)
-- Every task has complete TDD steps
-- PARALLEL/SEQUENTIAL tags on every task
-- Plan header with tech stack identified
+GAP: design-brief.md requirement: 'quoted requirement text'
+  MISSING_TEST: description of what test is needed
+  SUGGESTED_FIX: what the test should assert
+
+End your response with APPROVED or GAPS_FOUND.
+
+outcome=success if APPROVED
+outcome=fail if GAPS_FOUND
+"
+  ];
+
+  PatchPlan [
+    shape=box,
+    class="draft",
+    label="Patch Plan (GPT-5.2)",
+    goal_gate=true,
+    retry_target="HumanHelp",
+    max_retries=2,
+    prompt="You are working in `run.working_dir`.
+
+## Role
+You are patching an implementation plan to address gaps identified by the spec auditor.
+
+## Context
+1. Read docs/plans/plan-audit.txt for the list of gaps
+2. Read docs/plans/plan.md for the current plan
+3. Read docs/plans/design-brief.md for the original requirements
+
+## Task
+For each GAP in the audit:
+- MISSING_TASK: Add a new task with full TDD steps (failing test with complete code, exact run command, minimal implementation with complete code, exact run command, commit command)
+- MISSING_TEST: Add a test to the existing task that would fail if the requirement were missing
+- TAUTOLOGICAL_TEST: Replace the hardcoded assertion with one that computes the expected value from the actual content
+- VAGUE_IMPLEMENTATION: Replace the hand-wave with complete code
+
+## Rules
+- New task IDs continue from the highest existing ID (e.g., if plan has task-012, new tasks start at task-013)
+- Use the same checkbox format: - [ ] task-NNN: Title
+- Every function body must be complete code — NEVER write 'implement the logic'
+- Every test must verify behavior, not hardcoded values
+- Do NOT remove or modify existing passing tasks — only add or fix flagged ones
+
+## Output
+Update docs/plans/plan.md in place with the fixes.
 "
   ];
 
@@ -386,8 +362,8 @@ Write the consolidated plan to docs/plans/plan.md
     prompt="You are working in `run.working_dir`.
 
 Stage and commit the plan and all planning artifacts:
-git add docs/plans/plan.md docs/plans/plan-opus.md docs/plans/plan-gpt.md docs/plans/plan-gemini.md
-git commit -m 'docs(plan): add consolidated implementation plan'
+git add docs/plans/plan.md docs/plans/plan-audit.txt
+git commit -m 'docs(plan): add implementation plan'
 
 Verify: git log --oneline -1
 "
@@ -1043,16 +1019,14 @@ Report the current branch name and worktree location. No cleanup needed — the 
   CheckDesignApproved -> CommitBrief [label="approved", condition="context.tool_stdout=approved", weight=2];
   CheckDesignApproved -> ReviewDesign [label="revised, re-review", condition="context.tool_stdout=revised"];
 
-  // Phase 2: Plan
-  CommitBrief -> PlanFanOut;
-  PlanFanOut -> PlanOpus;
-  PlanFanOut -> PlanGPT;
-  PlanFanOut -> PlanGemini;
-  PlanOpus -> PlanJoin;
-  PlanGPT -> PlanJoin;
-  PlanGemini -> PlanJoin;
-  PlanJoin -> ConsolidatePlan;
-  ConsolidatePlan -> CommitPlan;
+  // Phase 2: Plan (draft-audit-patch loop)
+  CommitBrief -> DraftPlan;
+  DraftPlan -> ValidatePlanFormat;
+  ValidatePlanFormat -> AuditPlanSpec [label="format ok", condition="context.tool_stdout=format_ok", weight=2];
+  ValidatePlanFormat -> DraftPlan [label="format fail", condition="context.tool_stdout!=format_ok"];
+  AuditPlanSpec -> CommitPlan [label="plan approved", condition="outcome=success", weight=2];
+  AuditPlanSpec -> PatchPlan [label="gaps found", condition="outcome=fail"];
+  PatchPlan -> ValidatePlanFormat;
 
   // Phase 3: Setup
   CommitPlan -> SetupProject;
