@@ -214,7 +214,8 @@ Verify: git log --oneline -1
     class="draft",
     label="Draft Plan (GPT-5.2)",
     goal_gate=true,
-    retry_target="DraftPlan",
+    retry_target="HumanHelp",
+    max_retries=3,
     fidelity="full",
     prompt="You are working in `run.working_dir`.
 
@@ -268,7 +269,7 @@ Write your plan to docs/plans/plan.md
   ValidatePlanFormat [
     shape=parallelogram,
     label="Validate Plan Format",
-    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\nif [ ! -s \"$PLAN\" ]; then\n  printf 'fail_no_plan'\n  exit 0\nfi\ncount=$(grep -c '^- \\[ \\] task-[0-9]\\+:' \"$PLAN\" || true)\nif [ \"$count\" -eq 0 ]; then\n  printf 'fail_no_checkboxes'\n  exit 0\nfi\nhandwaves=$(grep -ciE '(write a complete|add appropriate|implement the|add validation|add logic|TODO|TBD)' \"$PLAN\" || true)\nif [ \"$handwaves\" -gt 0 ]; then\n  printf 'fail_handwaves'\n  exit 0\nfi\nprintf 'format_ok'"
+    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\nif [ ! -s \"$PLAN\" ]; then\n  printf 'fail_no_plan'\n  exit 0\nfi\ncount=$(grep -c '^- \\[ \\] task-[0-9]\\+:' \"$PLAN\" || true)\nif [ \"$count\" -eq 0 ]; then\n  printf 'fail_no_checkboxes'\n  exit 0\nfi\nhandwaves=$(grep -ciE '(write a complete implementation|add appropriate|add validation logic|add error handling logic|add the logic)' \"$PLAN\" || true)\nif [ \"$handwaves\" -gt 0 ]; then\n  printf 'fail_handwaves'\n  exit 0\nfi\nprintf 'format_ok'"
   ];
 
   AuditPlanSpec [
