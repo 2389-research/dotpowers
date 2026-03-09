@@ -100,16 +100,6 @@ All artifacts go in `docs/plans/` inside your project:
 
 Pipeline state (checkpoints, loop counters) lives in `.tracker/`. Gitignored.
 
-## Rough edges
-
-Tasks run one at a time, even when they could parallelize. The plan marks tasks as sequential and the pipeline doesn't currently fan out implementation.
-
-Language detection checks for `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml` in that order. If your project uses something else, you'll need to set it up manually.
-
-You can't add tasks to a finished plan and pick up where you left off. Each run goes from brainstorm to ship.
-
-When the pipeline is waiting for you at a human gate, nothing else moves. Leave the TUI open.
-
 ## The repo
 
 ```
