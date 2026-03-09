@@ -2,7 +2,7 @@
 
 You write `echo "a dvd bouncing tui" > idea.md`, run the pipeline, and come back to a tested, reviewed Rust project. One DOT file, ~1150 lines.
 
-dotpowers is the [superpowers](https://github.com/obra/superpowers) dev methodology encoded as a pipeline graph. It talks through the design with you, writes a plan, builds the thing with TDD, has three models argue about whether it's any good, and then asks you how to ship it. Runs on [tracker](https://github.com/2389-research/tracker), which executes LLM nodes, tool nodes, and human gates from Graphviz DOT files.
+dotpowers is the [superpowers](https://github.com/obra/superpowers) dev methodology encoded as a pipeline graph. It talks through the design with you, writes a plan, builds the thing with TDD, has three models argue about whether it's any good, and then asks you how to ship it. Runs on any [attractor](https://github.com/strongdm/attractor)-compliant DOT runner ([tracker](https://github.com/2389-research/tracker), [mammoth](https://github.com/strongdm/mammoth), [smasher](https://github.com/strongdm/smasher), etc.) that executes LLM nodes, tool nodes, and human gates from Graphviz DOT files.
 
 ## What happens when you run it
 
@@ -27,7 +27,7 @@ It does not guarantee the code works. Three models reviewing each other catches 
 
 ## Requirements
 
-- [tracker](https://github.com/2389-research/tracker)
+- An [attractor](https://github.com/strongdm/attractor)-compliant DOT runner (tracker, mammoth, smasher, etc.)
 - API keys for OpenAI, Anthropic, and Google (in `.env` or environment)
 - git
 - Whatever language toolchain your project needs (Rust, Python/uv, Node, Go -- the pipeline auto-detects)
@@ -38,15 +38,11 @@ It does not guarantee the code works. Three models reviewing each other catches 
 mkdir my-project && cd my-project
 echo "a terminal dashboard that shows system metrics" > idea.md
 git init
+# using tracker:
 tracker /path/to/dotpowers.dot --tui
-```
 
-`--tui` gives you a terminal UI with pipeline progress. Human gates prompt you inline.
-
-To resume an interrupted run:
-
-```bash
-tracker /path/to/dotpowers.dot --tui --resume
+# or mammoth, smasher, etc. -- any attractor-compliant runner
+mammoth /path/to/dotpowers.dot
 ```
 
 ## How it's wired
