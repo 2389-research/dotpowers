@@ -1,140 +1,129 @@
 # dotpowers
 
-A single DOT file that turns a one-line project idea into working, tested, reviewed software — autonomously.
+You write `echo "a dvd bouncing tui" > idea.md`, run the pipeline, and come back to a tested, reviewed Rust project. One DOT file, ~1150 lines.
 
-dotpowers encodes the [superpowers](https://github.com/obra/superpowers) development methodology as a pipeline graph. It brainstorms a design with you, writes a TDD implementation plan, builds the project task-by-task, reviews the result through multi-model consensus, and presents shipping options. The pipeline runs on [tracker](https://github.com/2389-research/tracker), a DAG runner that executes LLM nodes, tool nodes, and human gates defined in Graphviz DOT format.
+dotpowers is the [superpowers](https://github.com/obra/superpowers) dev methodology encoded as a pipeline graph. It talks through the design with you, writes a plan, builds the thing with TDD, has three models argue about whether it's any good, and then asks you how to ship it. Runs on [tracker](https://github.com/2389-research/tracker), which executes LLM nodes, tool nodes, and human gates from Graphviz DOT files.
 
-## What it does
+## What happens when you run it
 
-Given a working directory containing an `idea.md` (even one sentence), dotpowers will:
+1. **Brainstorm** -- reads your idea, asks you questions one at a time, writes a design brief, waits for you to say "looks good"
+2. **Plan** -- GPT-5.2 drafts a TDD plan, a shell script rejects vague hand-wavy steps, Opus audits every requirement against the brief, GPT-5.2 patches gaps. Up to 5 iterations before it gives up and asks you.
+3. **Setup** -- git init, install deps, run the test suite to confirm nothing is broken before we start
+4. **Implement** -- for each task: write a failing test, watch it fail, write minimal code, watch it pass, commit. Opus checks spec compliance, GPT-5.4 checks code quality. Both have to pass before the task is marked done.
+5. **Review** -- three models review the finished project independently. Then each model critiques the other two reviews. Opus reads everything and decides: ship, rework, or give up.
+6. **Ship** -- you pick: merge locally, push a PR, keep the branch, or throw it away
 
-1. **Brainstorm** the design with you — explores context, asks clarifying questions one at a time, proposes approaches, writes a design brief, and gets your approval before proceeding
-2. **Plan** the implementation — GPT-5.2 drafts a strict TDD plan, a format validator catches vague instructions, Opus audits every requirement against the design brief, and GPT-5.2 patches any gaps (up to 3 iterations)
-3. **Set up** the project — initializes git, installs dependencies, verifies a clean baseline
-4. **Implement** each task with TDD — writes a failing test, verifies the failure, writes minimal code to pass, verifies green, commits. Every task gets a spec compliance review (Opus) and a code quality review (GPT-5.4) before it can be marked complete
-5. **Review** the complete project — three models review independently, then cross-critique each other's reviews, then Opus synthesizes a consensus verdict
-6. **Ship** — presents four options: merge locally, push and create a PR, keep the branch, or discard
+## What it won't do
 
-## What it does not do
+It builds new projects from scratch. That's it. You can't point it at an existing codebase and say "fix this bug" or "add a feature." It expects a directory with an `idea.md` and nothing else.
 
-- **It is not a general-purpose agent.** It follows a fixed 6-phase pipeline. You cannot ask it to "fix this bug" or "add a feature to an existing project" — it builds new projects from scratch.
-- **It does not run without human interaction.** The brainstorm phase requires your input to approve the design. The finish phase requires you to choose how to ship. If the pipeline gets stuck, it escalates to you.
-- **It does not guarantee working software.** LLMs make mistakes. The multi-model review and TDD discipline catch most issues, but the pipeline can still produce bugs, especially in complex projects.
-- **It does not manage infrastructure.** No deployment, no CI/CD, no cloud resources. It produces code in a git repository.
-- **It does not work with existing codebases.** It expects a greenfield directory with an idea doc. It will not refactor, extend, or debug existing projects.
-- **It is not cheap to run.** A single pipeline run uses Opus 4.6, GPT-5.4, GPT-5.2, and Gemini 3.5 Flash across dozens of nodes. Expect significant API costs, especially if loops iterate.
+It does not deploy anything. No CI/CD, no cloud, no Docker. Output is code in a git repo.
+
+It will not run unattended start to finish. You approve the design. You choose how to ship. If it gets stuck, it asks you.
+
+It is not cheap. A full run hits Opus 4.6, GPT-5.4, GPT-5.2, and Gemini 3.5 Flash across dozens of nodes. If loops iterate (and they will), costs add up. We burned 3.5M OpenAI tokens on a single bad run before adding loop limits.
+
+It does not guarantee the code works. Three models reviewing each other catches a lot, but LLMs still make mistakes.
 
 ## Requirements
 
-- [tracker](https://github.com/2389-research/tracker) — the pipeline runner
-- API keys for OpenAI, Anthropic, and Google (set in `.env` or environment)
-- `git` installed and available on PATH
-- Language toolchains as needed (Rust, Python/uv, Node, Go — the pipeline detects project type automatically)
+- [tracker](https://github.com/2389-research/tracker)
+- API keys for OpenAI, Anthropic, and Google (in `.env` or environment)
+- git
+- Whatever language toolchain your project needs (Rust, Python/uv, Node, Go -- the pipeline auto-detects)
 
 ## Usage
 
 ```bash
-# Create a project directory with an idea
 mkdir my-project && cd my-project
 echo "a terminal dashboard that shows system metrics" > idea.md
 git init
-
-# Run the pipeline
 tracker /path/to/dotpowers.dot --tui
 ```
 
-The `--tui` flag gives you an interactive terminal UI showing pipeline progress. When the pipeline reaches a human gate (brainstorm questions, design review, finish options), it will prompt you directly.
+`--tui` gives you a terminal UI with pipeline progress. Human gates prompt you inline.
 
-### Resuming a run
-
-If a run is interrupted, tracker can resume from its last checkpoint:
+To resume an interrupted run:
 
 ```bash
 tracker /path/to/dotpowers.dot --tui --resume
 ```
 
-## Pipeline architecture
+## How it's wired
 
 ```
-Brainstorm ──► Plan ──► Setup ──► Implement ──► Final Review ──► Finish
-    │            │                    │              │
-    ▼            ▼                    ▼              ▼
-  Human      Draft/Audit/         TDD loop:       3 models ×
-  approval   Patch loop        implement →       3 reviews +
-             (max 5 iter)     spec review →     6 cross-critiques →
-                             quality review →      consensus
-                             mark complete
+Brainstorm --> Plan --> Setup --> Implement --> Final Review --> Finish
+    |            |                   |               |
+    v            v                   v               v
+  Human      Draft/Audit/       TDD loop:        3 reviews +
+  approval   Patch loop      write test ->     6 cross-critiques ->
+             (max 5)        spec review ->        consensus
+                           quality review ->
+                            mark complete
 ```
 
-### Models
+### Who does what
 
-| Role | Model | Why |
-|------|-------|-----|
-| Reasoning, spec audit, consensus | Claude Opus 4.6 | Strongest at line-by-line verification |
-| Implementation (TDD cycles) | GPT-5.4 | Fast code generation with tool use |
-| Plan drafting, plan patching | GPT-5.2 | Structured output, cost-effective |
-| Third opinion (reviews, critiques) | Gemini 3.5 Flash | Independent perspective, low cost |
+| Job | Model | Reasoning |
+|-----|-------|-----------|
+| Spec audits, consensus, debugging | Opus 4.6 | Best at careful line-by-line work |
+| Writing code (TDD cycles) | GPT-5.4 | Fast, good with tools |
+| Drafting and patching plans | GPT-5.2 | Structured output, cheaper |
+| Third opinion on reviews | Gemini 3.5 Flash | Different perspective, cheap |
 
-### Escalation chain
+### When things go wrong
 
-When something fails, the pipeline escalates through four levels before asking for help:
+The pipeline tries four things before bothering you:
 
-1. **Node retry** (max 2) — retry the same node with error context
-2. **Debug investigation** (max 2) — Opus does root cause analysis
-3. **Replan task** (max 1) — rethink the approach for this task
-4. **Human help** — escalate to you with full context
+1. Retry the node (up to 2 times)
+2. Debug investigation -- Opus does root cause analysis
+3. Replan the task -- rethink the approach
+4. Ask you
 
-### Loop budgets
+### Loop limits
 
-Every cycle in the pipeline has a hard termination limit to prevent runaway token burn:
+Early runs burned millions of tokens in infinite loops. Every cycle now has a hard cap:
 
-| Loop | Budget | Escalation |
-|------|--------|------------|
-| Plan validation (DraftPlan ↔ ValidatePlanFormat) | 5 iterations | → Human help |
-| Implement retry (review fail → ImplementTask) | 5 per task | → Human help |
-| Final review rework (ReviewConsensus → ImplementTask) | 2 rework cycles | → Failure summary |
+| Loop | Cap | Then what |
+|------|-----|-----------|
+| Plan validation | 5 iterations | Asks you for help |
+| Review -> re-implement | 5 per task | Asks you for help |
+| Final review rework | 2 full cycles | Writes a failure summary and stops |
 
-## Files produced
+Counters reset on each new run but persist across resume, so you won't hit a stale limit from a previous run.
 
-The pipeline writes all artifacts into `docs/plans/` in the working directory:
+## What it writes
 
-| File | Contents |
-|------|----------|
-| `docs/plans/brainstorm.md` | Brainstorm notes and decisions |
-| `docs/plans/design-brief.md` | Approved design specification |
-| `docs/plans/plan.md` | TDD implementation plan with task checkboxes |
-| `docs/plans/plan-audit.txt` | Opus audit results (APPROVED or gap list) |
-| `docs/plans/current_task_id.txt` | Currently executing task ID |
+All artifacts go in `docs/plans/` inside your project:
 
-Pipeline state lives in `.tracker/` (run checkpoints, loop counters). This directory is gitignored.
+- `brainstorm.md` -- notes and decisions from the brainstorm
+- `design-brief.md` -- the approved spec
+- `plan.md` -- TDD plan with `- [ ] task-NNN:` checkboxes
+- `plan-audit.txt` -- Opus audit (APPROVED or a list of gaps)
+- `current_task_id.txt` -- which task is running right now
 
-## Known limitations
+Pipeline state (checkpoints, loop counters) lives in `.tracker/`. Gitignored.
 
-- **No parallel task execution.** Tasks run sequentially even when independent. The plan labels tasks as sequential but the pipeline does not currently fan out implementation.
-- **Language detection is heuristic.** The pipeline checks for `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml` in that order. Projects using other build systems need manual setup.
-- **No incremental runs.** You cannot add tasks to a completed plan and resume. Each run is a full pipeline execution from brainstorm to finish.
-- **Human gates block the pipeline.** When waiting for your input, no other work progresses. Keep the TUI open or the pipeline will sit idle.
+## Rough edges
 
-## Development
+Tasks run one at a time, even when they could parallelize. The plan marks tasks as sequential and the pipeline doesn't currently fan out implementation.
 
-The pipeline definition lives in a single file:
+Language detection checks for `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml` in that order. If your project uses something else, you'll need to set it up manually.
+
+You can't add tasks to a finished plan and pick up where you left off. Each run goes from brainstorm to ship.
+
+When the pipeline is waiting for you at a human gate, nothing else moves. Leave the TUI open.
+
+## The repo
 
 ```
-dotpowers.dot    — the complete pipeline (~1150 lines of Graphviz DOT)
-docs/plans/      — design documents and iteration history
+dotpowers.dot    -- the pipeline (~1150 lines of DOT)
+docs/plans/      -- design docs and iteration history
 ```
 
-To validate the DOT file syntax:
+Validate syntax: `dot -Tsvg dotpowers.dot > /dev/null`
 
-```bash
-dot -Tsvg dotpowers.dot > /dev/null  # graphviz syntax check
-```
-
-To generate a visual graph:
-
-```bash
-dot -Tpng -Gdpi=300 dotpowers.dot -o dotpowers.png
-```
+Generate a graph image: `dot -Tpng -Gdpi=300 dotpowers.dot -o dotpowers.png`
 
 ## License
 
