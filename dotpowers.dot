@@ -273,6 +273,12 @@ Every task MUST be a markdown checkbox with a task ID:
 - Tag each task as PARALLEL or SEQUENTIAL based on dependencies.
 - Include setup tasks (project init, deps, tooling) before implementation tasks.
 
+## FILE DISCIPLINE
+- Prefer FEW files. A simple project should be ONE source file and ONE test file. Do NOT split code into multiple files unless there is a clear architectural reason (separate packages, 500+ lines, genuinely distinct domains).
+- All tests for a source file go in ONE corresponding test file (e.g. main_test.go, app_test.py, index.test.ts). NEVER create a separate test file per test function or per task.
+- When a task says 'write a failing test', that means ADD a test function to the existing test file, not create a new file.
+- If the plan has 8 tasks, the result should NOT have 8 test files. It should have 1-2 test files with 8+ test functions.
+
 ## YAGNI
 Ruthlessly cut anything not strictly needed for v1. If a feature is 'nice to have', drop it. If there's a simpler approach that covers 80% of the use case, prefer it. Do not plan for hypothetical future requirements.
 
@@ -511,12 +517,18 @@ Stage only the files you created or modified — use git add with specific file 
 Never stage .env, .tracker/, or other infrastructure files.
 git commit -m '<type>(<scope>): <description>'
 
+## File Discipline
+- Add new test functions to the EXISTING test file. Do NOT create a new test file for each task.
+- Do NOT split code into new source files unless there is a clear reason (separate package, 500+ lines). Append to existing files.
+- If the plan says 'create foo_test.go' but a test file already exists for that package, IGNORE the filename and add to the existing test file.
+
 ## Self-Review Checklist
 Before finishing, honestly assess:
 - Completeness: fully implemented everything in the task spec? Missed requirements? Edge cases?
 - Quality: clear names? clean and maintainable?
 - Discipline: avoided overbuilding (YAGNI)? only built what was requested?
 - Testing: tests verify behavior (not mocks)? TDD followed strictly?
+- File count: did you create unnecessary files? Could any new files be merged into existing ones?
 
 ## Forbidden Rationalizations
 - 'Too simple to test' — simple code breaks. Test takes 30 seconds.
