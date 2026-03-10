@@ -273,6 +273,9 @@ Every task MUST be a markdown checkbox with a task ID:
 - Tag each task as PARALLEL or SEQUENTIAL based on dependencies.
 - Include setup tasks (project init, deps, tooling) before implementation tasks.
 
+## YAGNI
+Ruthlessly cut anything not strictly needed for v1. If a feature is 'nice to have', drop it. If there's a simpler approach that covers 80% of the use case, prefer it. Do not plan for hypothetical future requirements.
+
 ## Output
 Write your plan to docs/plans/plan.md
 "
@@ -684,6 +687,7 @@ outcome=fail if FAIL
   DebugInvestigate [
     shape=box,
     label="Debug Investigation",
+    goal_gate=true,
     max_retries=2,
     retry_target="ReplanTask",
     fidelity="full",
@@ -1044,6 +1048,7 @@ Summarize why the final review failed, what remains unresolved, and concrete nex
 
   FinishGate [
     shape=hexagon,
+    mode="freeform",
     label="How to Ship?"
   ];
 
