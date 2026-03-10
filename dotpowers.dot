@@ -48,6 +48,7 @@ Explore the working directory to understand what we're building. Read EVERYTHING
 6. Identify the SINGLE most important open question — the one that would most change the design if answered differently
 7. Write your understanding and question to docs/plans/brainstorm.md
 8. Format the question as multiple choice (2-4 options) with your recommended answer marked
+9. Apply YAGNI ruthlessly — cut anything not strictly needed for v1. If a feature is nice-to-have, drop it.
 
 ## Important
 - Do NOT ask the human to describe the project if there are files that already describe it
@@ -100,6 +101,7 @@ Incorporate the human's answer and dig deeper.
    - Component breakdown
 6. Format as multiple choice with your recommendation
 7. When you believe you have enough to write a design brief, instead of a question write: READY_FOR_DESIGN
+Apply YAGNI at every step — propose the simplest approach that covers the core use case. Drop nice-to-haves.
 
 ## Output
 Append to docs/plans/brainstorm.md with:
@@ -131,6 +133,11 @@ You are a senior software architect producing a complete design brief from the b
 
 ## Context
 Read docs/plans/brainstorm.md for the full brainstorm conversation with the human.
+
+## MANDATORY: Propose Approaches
+Before writing the full brief, present 2-3 different architectural approaches with trade-offs.
+Lead with your recommended approach and explain why.
+Include these as the first section of the design brief so the human can evaluate them during review.
 
 ## Task
 Synthesize the brainstorm into a structured design brief. Cover ALL of these sections:
@@ -200,6 +207,11 @@ End your response with exactly APPROVED or REVISED.
 Stage and commit the design brief and brainstorm history:
 git add docs/plans/design-brief.md docs/plans/brainstorm.md
 git commit -m 'docs(design): add project design brief'
+
+Also create a dated archive copy:
+cp docs/plans/design-brief.md \"docs/plans/$(date +%Y-%m-%d)-$(basename $(pwd))-design.md\"
+git add docs/plans/*-design.md
+git commit --amend --no-edit
 
 Verify: git log --oneline -1
 "
@@ -389,6 +401,10 @@ Initialize the project based on the plan's tech stack section.
 
 ## Process
 1. Read docs/plans/plan.md — extract the tech stack from the plan header
+1b. Create a feature branch for this work:
+    branch_name=\"feature/$(basename $(pwd))\"
+    git checkout -b \"$branch_name\" 2>/dev/null || echo \"Already on branch $branch_name\"
+    Never implement directly on main/master without explicit human consent.
 2. Initialize the project for the identified language/framework:
    - Python: uv init (if no pyproject.toml), uv add deps, uv add --dev test/lint deps
    - Node: npm init, npm install deps
@@ -418,7 +434,7 @@ Initialize the project based on the plan's tech stack section.
   VerifyBaseline [
     shape=parallelogram,
     label="Verify Baseline",
-    tool_command="set -eu\nmkdir -p .tracker\nrm -f .tracker/plan_validate_count .tracker/rework_count .tracker/impl_count_*\nif [ -f pyproject.toml ]; then\n  uv run pytest --co -q 2>/dev/null || uv run python -m pytest --co -q 2>/dev/null || echo 'no-tests-yet'\n  printf 'baseline-verified-python'\nelif [ -f package.json ]; then\n  npm test 2>/dev/null || echo 'no-tests-yet'\n  printf 'baseline-verified-node'\nelif [ -f go.mod ]; then\n  go build ./... 2>&1 || true\n  go test ./... 2>&1 || echo 'no-tests-yet'\n  printf 'baseline-verified-go'\nelif [ -f Cargo.toml ]; then\n  cargo build 2>&1 || true\n  cargo test 2>&1 || echo 'no-tests-yet'\n  printf 'baseline-verified-rust'\nelse\n  printf 'baseline-verified-unknown'\nfi"
+    tool_command="set -eu\nmkdir -p .tracker\nrm -f .tracker/plan_validate_count .tracker/rework_count .tracker/impl_count_* .tracker/batch_count\nif [ -f pyproject.toml ]; then\n  uv run pytest --co -q 2>/dev/null || uv run python -m pytest --co -q 2>/dev/null || echo 'no-tests-yet'\n  printf 'baseline-verified-python'\nelif [ -f package.json ]; then\n  npm test 2>/dev/null || echo 'no-tests-yet'\n  printf 'baseline-verified-node'\nelif [ -f go.mod ]; then\n  go build ./... 2>&1 || true\n  go test ./... 2>&1 || echo 'no-tests-yet'\n  printf 'baseline-verified-go'\nelif [ -f Cargo.toml ]; then\n  cargo build 2>&1 || true\n  cargo test 2>&1 || echo 'no-tests-yet'\n  printf 'baseline-verified-rust'\nelse\n  printf 'baseline-verified-unknown'\nfi"
   ];
 
   // ============================================================
@@ -451,6 +467,16 @@ Write code before the test? Delete it. Start over. No exceptions.
 - Don't keep it as 'reference'
 - Don't 'adapt' it while writing tests
 - Delete means delete
+
+## Before Starting — Check for Ambiguity
+If you have ANY questions about the task spec that would change your implementation:
+1. Write your question to docs/plans/implementer-status.txt (NOT the word READY_TO_IMPLEMENT)
+2. End your response explaining the question
+3. outcome=success (the question will be routed to the human)
+
+If the spec is clear enough to proceed:
+1. Write READY_TO_IMPLEMENT to docs/plans/implementer-status.txt
+2. Continue with implementation below
 
 ## Context
 1. Read docs/plans/plan.md — find the task matching the ID in docs/plans/current_task_id.txt
@@ -495,6 +521,21 @@ Before finishing, honestly assess:
 - 'Need to explore first' — fine, but throw away exploration and start with TDD.
 - 'Test is hard to write = design unclear' — listen to the test.
 
+## When Re-entered After Review Failure
+If context shows a previous spec or quality review failed:
+1. Read the review feedback CAREFULLY before touching code
+2. Verify each finding against the actual codebase — reviewers can be wrong
+3. For valid findings: fix them. For invalid findings: document why they're wrong.
+4. Prioritize: blocking issues first, then simple fixes, then complex fixes
+5. Do NOT blindly implement every suggestion — check YAGNI. Reviewers sometimes add scope.
+6. After fixes: re-run full test suite to confirm nothing broke
+
+## VERIFICATION GATE
+Before claiming success, you MUST have fresh evidence from THIS session:
+- Run the test suite. Read output. Check exit codes. Count failures. THEN claim.
+- Do NOT say 'should work', 'probably passes', 'seems correct'.
+- If you haven't run the tests in THIS session, you cannot claim they pass.
+
 ## Success Criteria
 - Failing test written FIRST, verified failing
 - Minimal implementation passes the test
@@ -519,7 +560,10 @@ The implementer finished suspiciously quickly. Their work may be incomplete, ina
 
 ## Context
 1. Read docs/plans/plan.md — find the task matching the ID in docs/plans/current_task_id.txt
-2. Read the ACTUAL implementation code (git diff HEAD~1 to see what changed)
+2. Get the full diff for this task's changes:
+   BASE=$(git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null || git rev-list --max-parents=0 HEAD)
+   git diff $BASE...HEAD to see all changes on this branch
+   git log --oneline $BASE..HEAD to see all commits
 
 ## Verification Process
 DO NOT take the implementer's word for anything. DO NOT trust completeness claims.
@@ -532,6 +576,12 @@ DO NOT take the implementer's word for anything. DO NOT trust completeness claim
    - **Misunderstandings:** Interpreted requirements differently? Solved wrong problem?
 4. Run the tests yourself to verify they actually pass
 5. Verify TDD was followed: check git log for test commit before implementation commit
+
+## VERIFICATION GATE
+Before claiming success, you MUST have fresh evidence from THIS session:
+- Run the test suite. Read output. Check exit codes. Count failures. THEN claim.
+- Do NOT say 'should work', 'probably passes', 'seems correct'.
+- If you haven't run the tests in THIS session, you cannot claim they pass.
 
 ## Output
 If spec compliant: state PASS with evidence (specific code references)
@@ -574,6 +624,12 @@ This review only runs AFTER spec compliance has passed. The code is functionally
 - **Important** (should fix): poor patterns, maintainability concerns, missing error handling
 - **Suggestion** (nice to have): style improvements, minor optimizations
 
+## VERIFICATION GATE
+Before claiming success, you MUST have fresh evidence from THIS session:
+- Run the test suite. Read output. Check exit codes. Count failures. THEN claim.
+- Do NOT say 'should work', 'probably passes', 'seems correct'.
+- If you haven't run the tests in THIS session, you cannot claim they pass.
+
 ## Output
 If no Critical or Important issues: PASS
 If Critical or Important issues found: FAIL with file:line references and fix guidance
@@ -589,10 +645,36 @@ outcome=fail if FAIL
     tool_command="#!/bin/sh\nset -eu\nmkdir -p .tracker\nTASK=$(cat docs/plans/current_task_id.txt)\nCOUNTER=\".tracker/impl_count_${TASK}\"\ncount=0\n[ -f \"$COUNTER\" ] && count=$(cat \"$COUNTER\")\ncount=$((count + 1))\nprintf '%s' \"$count\" > \"$COUNTER\"\nif [ \"$count\" -gt 5 ]; then\n  printf 'budget_exhausted'\nelse\n  printf 'budget_ok'\nfi"
   ];
 
+  CheckImplementerReady [
+    shape=parallelogram,
+    label="Implementer Ready?",
+    tool_command="#!/bin/sh\nif grep -q 'READY_TO_IMPLEMENT' docs/plans/implementer-status.txt 2>/dev/null; then\n  printf 'ready'\nelse\n  printf 'has_question'\nfi"
+  ];
+
+  ImplementerQuestion [
+    shape=hexagon,
+    mode="freeform",
+    label="Implementer Has a Question",
+    prompt="The implementer has a question about the current task before starting work. See the question above and provide your answer."
+  ];
+
   MarkTaskComplete [
     shape=parallelogram,
     label="Mark Task Complete",
     tool_command="#!/bin/sh\nset -eu\ntarget=$(cat docs/plans/current_task_id.txt)\nsed -i.bak \"s/^- \\[ \\] ${target}/- [x] ${target}/\" docs/plans/plan.md\nrm -f docs/plans/plan.md.bak\nprintf 'completed-%s' \"$target\""
+  ];
+
+  CheckBatchComplete [
+    shape=parallelogram,
+    label="Batch Checkpoint?",
+    tool_command="#!/bin/sh\nset -eu\nmkdir -p .tracker\nCOUNTER='.tracker/batch_count'\ncount=0\n[ -f \"$COUNTER\" ] && count=$(cat \"$COUNTER\")\ncount=$((count + 1))\nprintf '%s' \"$count\" > \"$COUNTER\"\nif [ $((count % 3)) -eq 0 ]; then\n  printf 'batch_complete'\nelse\n  printf 'continue'\nfi"
+  ];
+
+  BatchReview [
+    shape=hexagon,
+    mode="freeform",
+    label="Batch Checkpoint (3 tasks done)",
+    prompt="3 tasks have been completed since the last checkpoint. Review progress so far and provide feedback, or say 'continue' to keep going."
   ];
 
   // ============================================================
@@ -627,17 +709,27 @@ The implementation for the task in docs/plans/current_task_id.txt has failed aft
 2. Compare working vs broken — identify EVERY difference
 3. Understand dependencies and assumptions
 
-## Phase 3: Hypothesis and Testing
-1. Form ONE hypothesis: 'I think X is the root cause because Y'
-2. Test with the SMALLEST possible change — one variable at a time
-3. If fix works: write a regression test, commit, report success
-4. If fix doesn't work: form a NEW hypothesis — do NOT pile on more fixes
+## Phase 3: TDD Fix
+1. Write a failing test that reproduces the bug FIRST
+2. Run it — confirm it FAILS for the RIGHT reason (the actual bug, not a typo)
+3. Write the SMALLEST fix to make the test pass
+4. Run it — confirm it PASSES
+5. Run ALL tests — confirm nothing else broke
+6. Commit the test first, then the fix
+
+You MUST see the test fail before writing the fix. If you wrote a fix before the test, delete the fix and start over.
 
 ## CRITICAL: >= 3 failed attempts means WRONG ARCHITECTURE
 If you've tried 3+ fixes and each reveals new coupling or shared state:
 - This is NOT a failed hypothesis — this is a wrong architecture
 - Report ARCHITECTURE_ISSUE and describe what's fundamentally broken
 - outcome=fail to escalate to replanning
+
+## VERIFICATION GATE
+Before claiming success, you MUST have fresh evidence from THIS session:
+- Run the test suite. Read output. Check exit codes. Count failures. THEN claim.
+- Do NOT say 'should work', 'probably passes', 'seems correct'.
+- If you haven't run the tests in THIS session, you cannot claim they pass.
 
 ## Output
 outcome=success if root cause found and fixed with regression test
@@ -1014,7 +1106,13 @@ Report the current branch name and worktree location. No cleanup needed — the 
   DiscardConfirm [
     shape=hexagon,
     mode="freeform",
-    label="Confirm Discard (type 'discard')"
+    label="Confirm Discard (type 'discard')",
+    prompt="WARNING: You are about to permanently discard ALL work on this branch.
+
+Before confirming, review what will be deleted:
+  git log --oneline $(git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null || echo HEAD~10)..HEAD
+
+Type 'discard' to confirm deletion, or anything else to go back to the shipping options."
   ];
 
   DiscardWork [
@@ -1078,14 +1176,20 @@ Report the current branch name and worktree location. No cleanup needed — the 
   PickNextTask -> ImplementTask [label="has task", condition="context.tool_stdout!=all_complete,context.tool_stdout!=no_tasks_found", weight=2];
   PickNextTask -> ValidateBuild [label="all done", condition="context.tool_stdout=all_complete"];
   PickNextTask -> HumanHelp [label="no tasks in plan", condition="context.tool_stdout=no_tasks_found"];
-  ImplementTask -> SpecReview;
+  ImplementTask -> CheckImplementerReady;
+  CheckImplementerReady -> SpecReview [label="ready to review", condition="context.tool_stdout=ready", weight=2];
+  CheckImplementerReady -> ImplementerQuestion [label="has question", condition="context.tool_stdout=has_question"];
+  ImplementerQuestion -> ImplementTask;
   SpecReview -> QualityReview [condition="outcome=success", label="spec pass", weight=2];
   SpecReview -> CheckImplementBudget [condition="outcome=fail", label="spec fail"];
   QualityReview -> MarkTaskComplete [condition="outcome=success", label="quality pass", weight=2];
   QualityReview -> CheckImplementBudget [condition="outcome=fail", label="quality fail"];
   CheckImplementBudget -> ImplementTask [label="retry ok", condition="context.tool_stdout=budget_ok", weight=2];
   CheckImplementBudget -> HumanHelp [label="too many attempts", condition="context.tool_stdout=budget_exhausted"];
-  MarkTaskComplete -> PickNextTask;
+  MarkTaskComplete -> CheckBatchComplete;
+  CheckBatchComplete -> PickNextTask [label="continue", condition="context.tool_stdout=continue", weight=2];
+  CheckBatchComplete -> BatchReview [label="batch checkpoint", condition="context.tool_stdout=batch_complete"];
+  BatchReview -> PickNextTask;
 
   // Phase 4: Escalation (graduated retry)
   // Note: ImplementTask has max_retries=2 with retry_target=ImplementTask
@@ -1144,7 +1248,7 @@ Report the current branch name and worktree location. No cleanup needed — the 
   FinishGate -> DiscardConfirm [label="[D] Discard this work", condition="outcome=Discard"];
 
   MergeLocal -> CleanupWorktree;
-  CreatePR -> CleanupWorktree;
+  CreatePR -> Exit;
   KeepBranch -> Exit;
   DiscardConfirm -> DiscardWork;
   DiscardWork -> CleanupWorktree;

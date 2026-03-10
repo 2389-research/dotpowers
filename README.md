@@ -6,10 +6,10 @@ dotpowers is the [superpowers](https://github.com/obra/superpowers) dev methodol
 
 ## What happens when you run it
 
-1. **Brainstorm** -- reads your idea, asks you questions one at a time, writes a design brief, waits for you to say "looks good"
+1. **Brainstorm** -- reads your idea, asks you questions one at a time (YAGNI enforced), proposes 2-3 approaches with trade-offs, writes a design brief, waits for you to say "looks good"
 2. **Plan** -- GPT-5.2 drafts a TDD plan, a shell script rejects vague hand-wavy steps, Opus audits every requirement against the brief, GPT-5.2 patches gaps. Up to 5 iterations before it gives up and asks you.
-3. **Setup** -- git init, install deps, run the test suite to confirm nothing is broken before we start
-4. **Implement** -- for each task: write a failing test, watch it fail, write minimal code, watch it pass, commit. Opus checks spec compliance, GPT-5.4 checks code quality. Both have to pass before the task is marked done.
+3. **Setup** -- git init, create a `feature/<project-name-slug>` branch (never implements on main), install deps, run the test suite to confirm nothing is broken before we start
+4. **Implement** -- for each task: write a failing test, watch it fail, write minimal code, watch it pass, commit. If the implementer has questions, it pauses at a human gate before proceeding. Opus checks spec compliance, GPT-5.4 checks code quality. Both have to pass before the task is marked done. Every 3rd completed task triggers a batch checkpoint where you review progress before the pipeline continues.
 5. **Review** -- three models review the finished project independently. Then each model critiques the other two reviews. Opus reads everything and decides: ship, rework, or give up.
 6. **Ship** -- you pick: merge locally, push a PR, keep the branch, or throw it away
 
@@ -19,7 +19,7 @@ It builds new projects from scratch. That's it. You can't point it at an existin
 
 It does not deploy anything. No CI/CD, no cloud, no Docker. Output is code in a git repo.
 
-It will not run unattended start to finish. You approve the design. You choose how to ship. If it gets stuck, it asks you.
+It will not run unattended start to finish. You approve the design. You review batch checkpoints every 3 tasks during implementation. You choose how to ship. If the implementer has questions or gets stuck, it asks you.
 
 It is not cheap. A full run hits Opus 4.6, GPT-5.4, GPT-5.2, and Gemini 3.5 Flash across dozens of nodes. If loops iterate (and they will), costs add up. We burned 3.5M OpenAI tokens on a single bad run before adding loop limits.
 
