@@ -1,6 +1,6 @@
 # dotpowers
 
-You write `echo "a dvd bouncing tui" > idea.md`, run the pipeline, and come back to a tested, reviewed Rust project. One DOT file, ~1150 lines.
+You write `echo "a dvd bouncing tui" > idea.md`, run the pipeline, and come back to a tested, reviewed Rust project. One DOT file, ~1300 lines.
 
 dotpowers is the [superpowers](https://github.com/obra/superpowers) dev methodology encoded as a pipeline graph. It talks through the design with you, writes a plan, builds the thing with TDD, has three models argue about whether it's any good, and then asks you how to ship it. Runs on any [attractor](https://github.com/strongdm/attractor)-compliant DOT runner ([tracker](https://github.com/2389-research/tracker), [mammoth](https://github.com/strongdm/mammoth), [smasher](https://github.com/strongdm/smasher), etc.) that executes LLM nodes, tool nodes, and human gates from Graphviz DOT files.
 
@@ -8,7 +8,7 @@ dotpowers is the [superpowers](https://github.com/obra/superpowers) dev methodol
 
 1. **Brainstorm** -- reads your idea, asks you questions one at a time (YAGNI enforced), proposes 2-3 approaches with trade-offs, writes a design brief, waits for you to say "looks good"
 2. **Plan** -- GPT-5.2 drafts a TDD plan, a shell script rejects vague hand-wavy steps, Opus audits every requirement against the brief, GPT-5.2 patches gaps. Up to 5 iterations before it gives up and asks you.
-3. **Setup** -- git init, create a `feature/<project-name-slug>` branch (never implements on main), install deps, run the test suite to confirm nothing is broken before we start
+3. **Setup** -- create a `feature/<project-name-slug>` branch (never implements on main), install deps, run the test suite to confirm nothing is broken before we start
 4. **Implement** -- for each task: write a failing test, watch it fail, write minimal code, watch it pass, commit. If the implementer has questions, it pauses at a human gate before proceeding. Opus checks spec compliance, GPT-5.4 checks code quality. Both have to pass before the task is marked done. Every 3rd completed task triggers a batch checkpoint where you review progress before the pipeline continues.
 5. **Review** -- three models review the finished project independently. Then each model critiques the other two reviews. Opus reads everything and decides: ship, rework, or give up.
 6. **Ship** -- you pick: merge locally, push a PR, keep the branch, or throw it away
@@ -30,7 +30,7 @@ It does not guarantee the code works. Three models reviewing each other catches 
 - An [attractor](https://github.com/strongdm/attractor)-compliant DOT runner (tracker, mammoth, smasher, etc.)
 - API keys for OpenAI, Anthropic, and Google (in `.env` or environment)
 - git
-- Whatever language toolchain your project needs (Rust, Python/uv, Node, Go -- the pipeline auto-detects)
+- Whatever language toolchain your project needs (Rust, Python/uv, Node, Go -- the plan specifies the stack and the pipeline sets it up)
 
 ## Usage
 
@@ -103,7 +103,7 @@ Pipeline state (checkpoints, loop counters) lives in `.tracker/`. Gitignored.
 ## The repo
 
 ```
-dotpowers.dot    -- the pipeline (~1150 lines of DOT)
+dotpowers.dot    -- the pipeline (~1300 lines of DOT)
 docs/plans/      -- design docs and iteration history
 ```
 
