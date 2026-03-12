@@ -683,11 +683,39 @@ outcome=fail if FAIL
     tool_command="#!/bin/sh\nset -eu\nmkdir -p .tracker\nCOUNTER='.tracker/batch_count'\ncount=0\n[ -f \"$COUNTER\" ] && count=$(cat \"$COUNTER\")\ncount=$((count + 1))\nprintf '%s' \"$count\" > \"$COUNTER\"\nif [ $((count % 3)) -eq 0 ]; then\n  printf 'batch_complete'\nelse\n  printf 'continue'\nfi"
   ];
 
-  BatchReview [
+  ApproveBatchProgress [
+    shape=hexagon,
+    mode="yes_no",
+    label="Batch Checkpoint (3 tasks done)",
+    prompt="3 tasks have been completed since the last checkpoint. Review progress so far.\n\n[Y] Continue — looks good, keep going\n[N] Feedback — I have concerns or changes"
+  ];
+
+  BatchFeedback [
     shape=hexagon,
     mode="freeform",
-    label="Batch Checkpoint (3 tasks done)",
-    prompt="3 tasks have been completed since the last checkpoint. Review progress so far and provide feedback, or say 'continue' to keep going."
+    label="Batch Feedback",
+    prompt="What concerns or changes do you have about the progress so far? Be specific."
+  ];
+
+  IncorporateBatchFeedback [
+    shape=box,
+    label="Incorporate Batch Feedback",
+    goal_gate=true,
+    retry_target="IncorporateBatchFeedback",
+    prompt="You are working in `run.working_dir`.
+
+## Task
+The human reviewed batch progress and has feedback.
+
+## Process
+1. Read the human's feedback from context
+2. Read docs/plans/plan.md for the current task list
+3. Adjust the plan or remaining tasks based on the feedback
+4. Update docs/plans/plan.md if tasks need to be added, removed, or reordered
+
+## Output
+Update docs/plans/plan.md with any requested changes.
+"
   ];
 
   // ============================================================
@@ -1203,8 +1231,11 @@ Type 'discard' to confirm deletion, or anything else to go back to the shipping 
   CheckImplementBudget -> HumanHelp [label="too many attempts", condition="context.tool_stdout=budget_exhausted"];
   MarkTaskComplete -> CheckBatchComplete;
   CheckBatchComplete -> PickNextTask [label="continue", condition="context.tool_stdout=continue", weight=2];
-  CheckBatchComplete -> BatchReview [label="batch checkpoint", condition="context.tool_stdout=batch_complete"];
-  BatchReview -> PickNextTask;
+  CheckBatchComplete -> ApproveBatchProgress [label="batch checkpoint", condition="context.tool_stdout=batch_complete"];
+  ApproveBatchProgress -> PickNextTask [label="[Y] Continue", condition="outcome=success", weight=2];
+  ApproveBatchProgress -> BatchFeedback [label="[N] Feedback", condition="outcome=fail"];
+  BatchFeedback -> IncorporateBatchFeedback;
+  IncorporateBatchFeedback -> PickNextTask;
 
   // Phase 4: Escalation (graduated retry)
   // Note: ImplementTask has max_retries=2 with retry_target=ImplementTask
