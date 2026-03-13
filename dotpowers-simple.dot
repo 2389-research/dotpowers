@@ -385,7 +385,7 @@ Initialize the project based on the plan's tech stack section.
   PickNextTask [
     shape=parallelogram,
     label="Pick Next Task",
-    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\ntotal=$(grep -c '^- \\[.\\] task-[0-9]' \"$PLAN\" 2>/dev/null || true)\nif [ \"$total\" -eq 0 ]; then\n  printf 'no_tasks_found'\n  exit 0\nfi\ntarget=$(grep -oE 'task-[0-9]+' \"$PLAN\" | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" \"$PLAN\"; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
+    tool_command="#!/bin/sh\nset -eu\nrm -f docs/plans/implementer-status.txt\nPLAN='docs/plans/plan.md'\ntotal=$(grep -c '^- \\[.\\] task-[0-9]' \"$PLAN\" 2>/dev/null || true)\nif [ \"$total\" -eq 0 ]; then\n  printf 'no_tasks_found'\n  exit 0\nfi\ntarget=$(grep -oE 'task-[0-9]+' \"$PLAN\" | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" \"$PLAN\"; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
   ];
 
   ImplementTask [
@@ -757,34 +757,6 @@ Summarize why the final review failed, what remains unresolved, and concrete nex
     tool_command="set -eu\necho '=== Final verification before ship ==='\nif [ -f pyproject.toml ]; then\n  uv run pytest -v 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nelif [ -f package.json ]; then\n  npm test 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nelif [ -f go.mod ]; then\n  go test ./... 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nelif [ -f Cargo.toml ]; then\n  cargo test 2>&1 || { echo 'FINAL_TEST_FAIL'; exit 1; }\nfi\nprintf 'final-verification-pass'"
   ];
 
-  FinishGate [
-    shape=hexagon,
-    mode="freeform",
-    label="How to Ship?"
-  ];
-
-  MergeLocal [
-    shape=box,
-    class="implement",
-    label="Merge Locally",
-    goal_gate=true,
-    retry_target="MergeLocal",
-    prompt="You are working in `run.working_dir`.
-
-## Task
-Merge the current branch back to the base branch locally.
-
-## Process
-1. Determine base branch: git merge-base HEAD main 2>/dev/null || git merge-base HEAD master
-2. git checkout <base-branch>
-3. git pull (if remote exists)
-4. git merge <feature-branch>
-5. Run full test suite on merged result to verify no regressions
-6. git branch -d <feature-branch>
-7. Report: merged successfully, tests pass on merged result
-"
-  ];
-
   CreatePR [
     shape=box,
     class="implement",
@@ -806,52 +778,6 @@ Push the branch and create a pull request.
    gh pr create --title '<title>' --body '<summary + test plan>'
 4. Report the PR URL
 "
-  ];
-
-  KeepBranch [
-    shape=box,
-    class="implement",
-    label="Keep Branch",
-    goal_gate=true,
-    retry_target="KeepBranch",
-    prompt="You are working in `run.working_dir`.
-
-Report the current branch name and worktree location. No cleanup needed — the user will handle it later."
-  ];
-
-  DiscardConfirm [
-    shape=hexagon,
-    mode="freeform",
-    label="Confirm Discard (type 'discard')",
-    prompt="WARNING: You are about to permanently discard ALL work on this branch.
-
-Before confirming, review what will be deleted:
-  git log --oneline $(git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null || echo HEAD~10)..HEAD
-
-Type 'discard' to confirm deletion, or anything else to go back to the shipping options."
-  ];
-
-  DiscardWork [
-    shape=box,
-    class="implement",
-    label="Discard Work",
-    goal_gate=true,
-    retry_target="DiscardWork",
-    prompt="You are working in `run.working_dir`.
-
-## WARNING: Destructive operation confirmed by user.
-
-1. Identify the base branch
-2. git checkout <base-branch>
-3. git branch -D <feature-branch>
-4. Report: work discarded, branch deleted
-"
-  ];
-
-  CleanupWorktree [
-    shape=parallelogram,
-    label="Cleanup Worktree",
-    tool_command="set -eu\nWORKTREE_PATH=$(git worktree list | grep -v 'bare\\|main\\|master' | head -1 | awk '{print $1}')\nif [ -n \"$WORKTREE_PATH\" ] && [ \"$WORKTREE_PATH\" != \"$(pwd)\" ]; then\n  git worktree remove \"$WORKTREE_PATH\" 2>/dev/null || echo 'worktree-cleanup-skipped'\nfi\nprintf 'cleanup-done'"
   ];
 
   // ============================================================
@@ -925,18 +851,8 @@ Type 'discard' to confirm deletion, or anything else to go back to the shipping 
   FailureSummary -> Exit;
 
   // Phase 6: Finish
-  VerifyTestsFinal -> FinishGate [condition="outcome=success", label="tests pass", weight=2];
+  VerifyTestsFinal -> CreatePR [condition="outcome=success", label="tests pass", weight=2];
   VerifyTestsFinal -> CheckReworkBudget [condition="outcome=fail", label="tests fail"];
 
-  FinishGate -> MergeLocal [label="[M] Merge locally", condition="outcome=Merge"];
-  FinishGate -> CreatePR [label="[P] Push and create PR", condition="outcome=PR", weight=2];
-  FinishGate -> KeepBranch [label="[K] Keep branch as-is", condition="outcome=Keep"];
-  FinishGate -> DiscardConfirm [label="[D] Discard this work", condition="outcome=Discard"];
-
-  MergeLocal -> CleanupWorktree;
   CreatePR -> Exit;
-  KeepBranch -> Exit;
-  DiscardConfirm -> DiscardWork;
-  DiscardWork -> CleanupWorktree;
-  CleanupWorktree -> Exit;
 }

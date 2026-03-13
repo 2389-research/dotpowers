@@ -494,7 +494,7 @@ Initialize the project based on the plan's tech stack section.
   PickNextTask [
     shape=parallelogram,
     label="Pick Next Task",
-    tool_command="#!/bin/sh\nset -eu\nPLAN='docs/plans/plan.md'\ntotal=$(grep -c '^- \\[.\\] task-[0-9]' \"$PLAN\" 2>/dev/null || true)\nif [ \"$total\" -eq 0 ]; then\n  printf 'no_tasks_found'\n  exit 0\nfi\ntarget=$(grep -oE 'task-[0-9]+' \"$PLAN\" | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" \"$PLAN\"; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
+    tool_command="#!/bin/sh\nset -eu\nrm -f docs/plans/implementer-status.txt\nPLAN='docs/plans/plan.md'\ntotal=$(grep -c '^- \\[.\\] task-[0-9]' \"$PLAN\" 2>/dev/null || true)\nif [ \"$total\" -eq 0 ]; then\n  printf 'no_tasks_found'\n  exit 0\nfi\ntarget=$(grep -oE 'task-[0-9]+' \"$PLAN\" | while read -r tid; do\n  if grep -q \"^- \\[ \\] $tid\" \"$PLAN\"; then\n    echo \"$tid\"\n    break\n  fi\ndone)\nif [ -z \"$target\" ]; then\n  printf 'all_complete'\n  exit 0\nfi\nprintf '%s' \"$target\" > docs/plans/current_task_id.txt\nprintf 'next_task-%s' \"$target\""
   ];
 
   CookoffFanOut [shape=component, label="Cookoff: Parallel Implementation"];
