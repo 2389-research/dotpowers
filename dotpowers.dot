@@ -22,6 +22,22 @@ digraph dotpowers {
   Exit  [shape=Msquare,  label="Exit"];
 
   // ============================================================
+  // RESUME / ARCHIVE — preserve old plans, skip brainstorm if resuming
+  // ============================================================
+
+  CheckExistingPlans [
+    shape=parallelogram,
+    label="Check Existing Plans",
+    tool_command="#!/bin/sh\nif [ -f docs/plans/plan.md ] && grep -q '^- \\[ \\]' docs/plans/plan.md 2>/dev/null; then\n  printf 'resume'\nelse\n  printf 'fresh'\nfi"
+  ];
+
+  ArchiveOldPlans [
+    shape=parallelogram,
+    label="Archive Old Plans",
+    tool_command="#!/bin/sh\nif ls docs/plans/*.md 1>/dev/null 2>&1; then\n  archive_dir=\"docs/plans/archive/run-$(date +%Y%m%d-%H%M%S)\"\n  mkdir -p \"$archive_dir\"\n  for f in docs/plans/*.md; do [ -f \"$f\" ] && cp \"$f\" \"$archive_dir/\"; done\n  rm -f docs/plans/brainstorm.md docs/plans/design-brief.md\n  printf 'archived to %s' \"$archive_dir\"\nelse\n  printf 'clean'\nfi"
+  ];
+
+  // ============================================================
   // PHASE 0 — EXPLORE IDEA  (superpowers:brainstorming — understand the idea)
   // ============================================================
 
@@ -40,13 +56,12 @@ You are a senior software architect starting a brainstorm session.
 Explore the working directory to understand what we're building. Read EVERYTHING — idea docs, specs, READMEs, existing code, config files. Your job is to absorb all available context before asking the human anything.
 
 ## Process
-1. Delete any stale brainstorm artifacts: rm -f docs/plans/brainstorm.md docs/plans/design-brief.md
-2. List all files in the working directory (ls -la, and ls any subdirectories)
-3. Read every file that could describe the project (*.md, README*, SPEC*, idea*, etc.)
-4. Read any source code files to understand existing implementation
-5. Summarize what you understand so far
-6. Identify the SINGLE most important open question — the one that would most change the design if answered differently
-7. Write your understanding and question to docs/plans/brainstorm.md
+1. List all files in the working directory (ls -la, and ls any subdirectories)
+2. Read every file that could describe the project (*.md, README*, SPEC*, idea*, etc.)
+3. Read any source code files to understand existing implementation
+4. Summarize what you understand so far
+5. Identify the SINGLE most important open question — the one that would most change the design if answered differently
+6. Write your understanding and question to docs/plans/brainstorm.md
 8. Format the question as multiple choice (2-4 options) with your recommended answer marked
 9. Apply YAGNI ruthlessly — cut anything not strictly needed for v1. If a feature is nice-to-have, drop it.
 
@@ -677,46 +692,6 @@ outcome=fail if FAIL
     tool_command="#!/bin/sh\nset -eu\ntarget=$(cat docs/plans/current_task_id.txt)\nsed -i.bak \"s/^- \\[ \\] ${target}/- [x] ${target}/\" docs/plans/plan.md\nrm -f docs/plans/plan.md.bak\nprintf 'completed-%s' \"$target\""
   ];
 
-  CheckBatchComplete [
-    shape=parallelogram,
-    label="Batch Checkpoint?",
-    tool_command="#!/bin/sh\nset -eu\nmkdir -p .tracker\nCOUNTER='.tracker/batch_count'\ncount=0\n[ -f \"$COUNTER\" ] && count=$(cat \"$COUNTER\")\ncount=$((count + 1))\nprintf '%s' \"$count\" > \"$COUNTER\"\nif [ $((count % 3)) -eq 0 ]; then\n  printf 'batch_complete'\nelse\n  printf 'continue'\nfi"
-  ];
-
-  ApproveBatchProgress [
-    shape=hexagon,
-    mode="yes_no",
-    label="Batch Checkpoint (3 tasks done)",
-    prompt="3 tasks have been completed since the last checkpoint. Review progress so far.\n\n[Y] Continue — looks good, keep going\n[N] Feedback — I have concerns or changes"
-  ];
-
-  BatchFeedback [
-    shape=hexagon,
-    mode="freeform",
-    label="Batch Feedback",
-    prompt="What concerns or changes do you have about the progress so far? Be specific."
-  ];
-
-  IncorporateBatchFeedback [
-    shape=box,
-    label="Incorporate Batch Feedback",
-    goal_gate=true,
-    retry_target="IncorporateBatchFeedback",
-    prompt="You are working in `run.working_dir`.
-
-## Task
-The human reviewed batch progress and has feedback.
-
-## Process
-1. Read the human's feedback from context
-2. Read docs/plans/plan.md for the current task list
-3. Adjust the plan or remaining tasks based on the feedback
-4. Update docs/plans/plan.md if tasks need to be added, removed, or reordered
-
-## Output
-Update docs/plans/plan.md with any requested changes.
-"
-  ];
 
   // ============================================================
   // PHASE 4 — ESCALATION PATH  (superpowers:systematic-debugging)
@@ -1185,8 +1160,12 @@ Type 'discard' to confirm deletion, or anything else to go back to the shipping 
   // EDGES
   // ============================================================
 
+  // Resume check: skip brainstorm if plan with incomplete tasks exists
   // Phase 0: Brainstorm (check for existing context, ask human only if empty)
-  Start -> ExploreIdea;
+  Start -> CheckExistingPlans;
+  CheckExistingPlans -> PickNextTask [label="resume — plan exists", condition="context.tool_stdout=resume", weight=2];
+  CheckExistingPlans -> ArchiveOldPlans [label="fresh start", condition="context.tool_stdout=fresh"];
+  ArchiveOldPlans -> ExploreIdea;
   ExploreIdea -> HumanBrainstorm;
   HumanBrainstorm -> RefineUnderstanding;
   RefineUnderstanding -> CheckBrainstormDone;
@@ -1229,13 +1208,7 @@ Type 'discard' to confirm deletion, or anything else to go back to the shipping 
   QualityReview -> CheckImplementBudget [condition="outcome=fail", label="quality fail"];
   CheckImplementBudget -> ImplementTask [label="retry ok", condition="context.tool_stdout=budget_ok", weight=2];
   CheckImplementBudget -> HumanHelp [label="too many attempts", condition="context.tool_stdout=budget_exhausted"];
-  MarkTaskComplete -> CheckBatchComplete;
-  CheckBatchComplete -> PickNextTask [label="continue", condition="context.tool_stdout=continue", weight=2];
-  CheckBatchComplete -> ApproveBatchProgress [label="batch checkpoint", condition="context.tool_stdout=batch_complete"];
-  ApproveBatchProgress -> PickNextTask [label="[Y] Continue", condition="outcome=success", weight=2];
-  ApproveBatchProgress -> BatchFeedback [label="[N] Feedback", condition="outcome=fail"];
-  BatchFeedback -> IncorporateBatchFeedback;
-  IncorporateBatchFeedback -> PickNextTask;
+  MarkTaskComplete -> PickNextTask;
 
   // Phase 4: Escalation (graduated retry)
   // Note: ImplementTask has max_retries=2 with retry_target=ImplementTask

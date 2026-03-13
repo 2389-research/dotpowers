@@ -24,6 +24,22 @@ digraph dotpowers {
   Exit  [shape=Msquare,  label="Exit"];
 
   // ============================================================
+  // RESUME / ARCHIVE — preserve old plans, skip brainstorm if resuming
+  // ============================================================
+
+  CheckExistingPlans [
+    shape=parallelogram,
+    label="Check Existing Plans",
+    tool_command="#!/bin/sh\nif [ -f docs/plans/plan.md ] && grep -q '^- \\[ \\]' docs/plans/plan.md 2>/dev/null; then\n  printf 'resume'\nelse\n  printf 'fresh'\nfi"
+  ];
+
+  ArchiveOldPlans [
+    shape=parallelogram,
+    label="Archive Old Plans",
+    tool_command="#!/bin/sh\nif ls docs/plans/*.md 1>/dev/null 2>&1; then\n  archive_dir=\"docs/plans/archive/run-$(date +%Y%m%d-%H%M%S)\"\n  mkdir -p \"$archive_dir\"\n  for f in docs/plans/*.md; do [ -f \"$f\" ] && cp \"$f\" \"$archive_dir/\"; done\n  rm -f docs/plans/brainstorm-context.md docs/plans/design-brief.md docs/plans/design-explore-*.md\n  printf 'archived to %s' \"$archive_dir\"\nelse\n  printf 'clean'\nfi"
+  ];
+
+  // ============================================================
   // PHASE 0 — OMAKASE  (parallel design exploration replaces brainstorm loop)
   // ============================================================
 
@@ -42,14 +58,13 @@ You are a senior software architect exploring a project idea autonomously.
 Explore the working directory to understand what we're building. Read EVERYTHING — idea docs, specs, READMEs, existing code, config files. Your job is to absorb all available context and synthesize it into a brainstorm context document.
 
 ## Process
-1. Delete any stale brainstorm artifacts: rm -f docs/plans/brainstorm-context.md docs/plans/design-brief.md docs/plans/design-explore-*.md
-2. List all files in the working directory (ls -la, and ls any subdirectories)
-3. Read every file that could describe the project (*.md, README*, SPEC*, idea*, etc.)
-4. Read any source code files to understand existing implementation
-5. Summarize what you understand so far
-6. Identify key open questions and constraints
-7. Write your understanding to docs/plans/brainstorm-context.md
-8. Apply YAGNI ruthlessly — cut anything not strictly needed for v1. If a feature is nice-to-have, drop it.
+1. List all files in the working directory (ls -la, and ls any subdirectories)
+2. Read every file that could describe the project (*.md, README*, SPEC*, idea*, etc.)
+3. Read any source code files to understand existing implementation
+4. Summarize what you understand so far
+5. Identify key open questions and constraints
+6. Write your understanding to docs/plans/brainstorm-context.md
+7. Apply YAGNI ruthlessly — cut anything not strictly needed for v1. If a feature is nice-to-have, drop it.
 
 ## Important
 - This pipeline runs fully autonomously with no human intervention
@@ -1389,8 +1404,11 @@ Push the branch and create a pull request.
   // EDGES
   // ============================================================
 
-  // Phase 0: Omakase (parallel design exploration)
-  Start -> ExploreIdea;
+  // Resume check → Phase 0: Omakase (parallel design exploration)
+  Start -> CheckExistingPlans;
+  CheckExistingPlans -> PickNextTask [label="resume — plan exists", condition="context.tool_stdout=resume", weight=2];
+  CheckExistingPlans -> ArchiveOldPlans [label="fresh start", condition="context.tool_stdout=fresh"];
+  ArchiveOldPlans -> ExploreIdea;
   ExploreIdea -> OmakaseFanOut;
   OmakaseFanOut -> DesignExploreOpus;
   OmakaseFanOut -> DesignExploreGPT;
