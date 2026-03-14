@@ -111,6 +111,13 @@ Validate syntax: `dot -Tsvg dotpowers.dot > /dev/null`
 
 Generate a graph image: `dot -Tpng -Gdpi=300 dotpowers.dot -o dotpowers.png`
 
+## Related
+
+- [dot-files](https://github.com/2389-research/dot-files) — Standalone pipelines (speedrun, bug-hunter, refactor-express, doc-writer) and interactive games (20q, story-engine, model-debate) that don't use the superpowers framework
+- [tracker](https://github.com/2389-research/tracker) — The DOT pipeline runner we use most
+- [mammoth](https://github.com/2389-research/mammoth) — The DOT pipeline format and ecosystem
+- [superpowers](https://github.com/obra/superpowers) — The dev methodology this encodes
+
 ## License
 
 [TBD]
