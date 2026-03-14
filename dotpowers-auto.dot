@@ -1060,7 +1060,7 @@ Finalize the project and push if possible.
   DraftPlan -> ValidatePlanFormat;
   ValidatePlanFormat -> AuditPlanSpec [label="format ok", condition="context.tool_stdout=format_ok", weight=2];
   ValidatePlanFormat -> AutoRecover [label="plan loop exhausted", condition="context.tool_stdout=fail_retries_exhausted"];
-  ValidatePlanFormat -> DraftPlan [label="format fail", condition="context.tool_stdout!=format_ok,context.tool_stdout!=fail_retries_exhausted"];
+  ValidatePlanFormat -> DraftPlan [label="format fail", condition="context.tool_stdout!=format_ok && context.tool_stdout!=fail_retries_exhausted"];
   AuditPlanSpec -> CommitPlan [label="plan approved", condition="outcome=success", weight=2];
   AuditPlanSpec -> PatchPlan [label="gaps found", condition="outcome=fail"];
   PatchPlan -> ValidatePlanFormat;
@@ -1071,7 +1071,7 @@ Finalize the project and push if possible.
 
   // Phase 4: Implement Loop (no human questions, no batch checkpoints)
   VerifyBaseline -> PickNextTask;
-  PickNextTask -> ImplementTask [label="has task", condition="context.tool_stdout!=all_complete,context.tool_stdout!=no_tasks_found", weight=2];
+  PickNextTask -> ImplementTask [label="has task", condition="context.tool_stdout!=all_complete && context.tool_stdout!=no_tasks_found", weight=2];
   PickNextTask -> ValidateBuild [label="all done", condition="context.tool_stdout=all_complete"];
   PickNextTask -> AutoRecover [label="no tasks in plan", condition="context.tool_stdout=no_tasks_found"];
   ImplementTask -> SpecReview;
